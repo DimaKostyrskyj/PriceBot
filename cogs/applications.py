@@ -108,6 +108,10 @@ class ApplicationForm(Modal, title='Заявка в Price FamQ'):
             icon_url=logo_url if logo_url != "https://i.imgur.com/your_logo.png" else None
         )
         
+        # Создаем текстовое сообщение перед embed
+        message_text = f"Заявка от {interaction.user.mention} <@1435583363724476486>"
+        
+        await review_channel.send(content=message_text, embed=embed, view=view)
         # Создаем кнопки для рассмотрения
         view = ApplicationReviewView(self.bot, interaction.user.id)
         
