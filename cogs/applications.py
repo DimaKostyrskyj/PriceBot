@@ -135,7 +135,7 @@ class ApplicationForm(Modal, title='Заявка в Price FamQ'):
                 
                 # Создаем текстовое сообщение с упоминанием ролей
                 mention_text = " ".join(mention_roles) if mention_roles else "@here"
-                message_content = f"{mention_text} 📝 Новая заявка!"
+                message_content = f"{mention_text}  Рассмотреть!!!"
                 
                 await review_channel.send(content=message_content, embed=embed, view=view)
                 
