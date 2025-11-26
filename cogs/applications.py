@@ -55,99 +55,105 @@ class ApplicationForm(Modal, title='Заявка в Price FamQ'):
         """Обработка отправки заявки"""
         # ВАЖНО: Сначала отвечаем на interaction!
         await interaction.response.send_message(
-            'Ваша заявка отправлена! Ожидайте рассмотрения.',
+            '✅ Ваша заявка отправлена! Ожидайте рассмотрения.',
             ephemeral=True
         )
         
         # Создаем минималистичный embed с заявкой
         embed = discord.Embed(
-            title='Новая заявка',
+            title='📝 Новая заявка',
             description=f'**Кандидат:** {interaction.user.mention}\n**Дата:** <t:{int(datetime.now().timestamp())}:F>',
             color=self.config.get_color('primary'),
             timestamp=datetime.now()
         )
         
         logo_url = self.config.get('logo_url')
-        if logo_url != "https://i.imgur.com/your_logo.png":
+        if logo_url and logo_url.startswith('http'):
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
         
         embed.add_field(
-            name='Имя персонажа', 
+            name='👤 Имя персонажа', 
             value=self.name.value, 
             inline=True
         )
         embed.add_field(
-            name='Возраст', 
+            name='🎂 Возраст', 
             value=f'{self.age.value} лет', 
             inline=True
         )
         embed.add_field(
-            name='Discord', 
+            name='📱 Discord', 
             value=f'{interaction.user.name}', 
             inline=True
         )
         
         embed.add_field(
-            name='Опыт игры', 
+            name='🎮 Опыт игры', 
             value=self.experience.value, 
             inline=False
         )
         embed.add_field(
-            name='Почему Price FamQ?', 
+            name='💭 Почему Price FamQ?', 
             value=self.why_family.value, 
             inline=False
         )
         embed.add_field(
-            name='О себе', 
+            name='👤 О себе', 
             value=self.about_yourself.value, 
             inline=False
         )
         
         embed.set_footer(
             text=f'ID: {interaction.user.id}',
-            icon_url=logo_url if logo_url != "https://i.imgur.com/your_logo.png" else None
+            icon_url=logo_url if logo_url and logo_url.startswith('http') else None
         )
         
-       # Получаем ID ролей модераторов для упоминания
-        moderator_role_ids = self.config.get('moderator_role_ids', [])
-        mention_roles = []
-
-        for role_id in moderator_role_ids:
-            role = review_channel.guild.get_role(role_id)
-            if role:
-                mention_roles.append(role.mention)
-
-        # Создаем текстовое сообщение с упоминанием ролей
-        mention_text = " ".join(mention_roles) if mention_roles else "@here"
-        message_content = f"{mention_text} 📝 Новая заявка!"
-
-        await review_channel.send(content=message_content, embed=embed, view=view)
         # Создаем кнопки для рассмотрения
         view = ApplicationReviewView(self.bot, interaction.user.id)
         
         # Отправляем в канал рассмотрения
         review_channel_id = self.config.get('review_channel_id')
+        if not review_channel_id:
+            await interaction.followup.send(
+                '❌ Ошибка: канал рассмотрения не настроен.',
+                ephemeral=True
+            )
+            return
+            
         review_channel = self.bot.get_channel(review_channel_id)
         
         if review_channel:
             try:
-                await review_channel.send(embed=embed, view=view)
+                # Получаем ID ролей модераторов для упоминания
+                moderator_role_ids = self.config.get('moderator_role_ids', [])
+                mention_roles = []
+                
+                for role_id in moderator_role_ids:
+                    role = review_channel.guild.get_role(role_id)
+                    if role:
+                        mention_roles.append(role.mention)
+                
+                # Создаем текстовое сообщение с упоминанием ролей
+                mention_text = " ".join(mention_roles) if mention_roles else "@here"
+                message_content = f"{mention_text} 📝 Новая заявка!"
+                
+                await review_channel.send(content=message_content, embed=embed, view=view)
                 
                 # Логирование
                 await self._log_application(interaction.user, "подана")
             except discord.Forbidden:
                 await interaction.followup.send(
-                    'Ошибка: нет доступа к каналу рассмотрения.',
+                    '❌ Ошибка: нет доступа к каналу рассмотрения.',
                     ephemeral=True
                 )
             except Exception as e:
                 await interaction.followup.send(
-                    f'Ошибка при отправке заявки: {e}',
+                    f'❌ Ошибка при отправке заявки: {e}',
                     ephemeral=True
                 )
         else:
             await interaction.followup.send(
-                'Ошибка: канал рассмотрения не настроен.',
+                '❌ Ошибка: канал рассмотрения не найден.',
                 ephemeral=True
             )
     
@@ -200,19 +206,19 @@ class RejectReasonModal(Modal, title='Причина отклонения'):
         
         # Уведомляем пользователя об отклонении
         reject_embed = discord.Embed(
-            title='Заявка отклонена',
+            title='❌ Заявка отклонена',
             description='Ваша заявка в Price FamQ была отклонена.',
             color=self.config.get_color('error'),
             timestamp=datetime.now()
         )
         
         logo_url = self.config.get('logo_url')
-        if logo_url != "https://i.imgur.com/your_logo.png":
+        if logo_url and logo_url.startswith('http'):
             reject_embed.set_thumbnail(url=logo_url)
         
-        reject_embed.add_field(name='Причина', value=self.reason.value, inline=False)
+        reject_embed.add_field(name='📝 Причина', value=self.reason.value, inline=False)
         reject_embed.add_field(
-            name='Что дальше?',
+            name='ℹ️ Что дальше?',
             value='Вы можете подать новую заявку после устранения указанных замечаний.',
             inline=False
         )
@@ -256,10 +262,10 @@ class RejectReasonModal(Modal, title='Причина отклонения'):
             color=self.config.get_color('error'),
             timestamp=datetime.now()
         )
-        embed.add_field(name='Модератор', value=moderator.mention, inline=True)
-        embed.add_field(name='Заявитель', value=applicant.mention, inline=True)
+        embed.add_field(name='👤 Модератор', value=moderator.mention, inline=True)
+        embed.add_field(name='👥 Заявитель', value=applicant.mention, inline=True)
         if reason:
-            embed.add_field(name='Причина', value=reason, inline=False)
+            embed.add_field(name='📝 Причина', value=reason, inline=False)
         
         try:
             await logs_channel.send(embed=embed)
@@ -279,9 +285,10 @@ class ApplicationReviewView(View):
     def _check_permissions(self, interaction: discord.Interaction) -> bool:
         """Проверка прав на рассмотрение заявок"""
         moderator_role_ids = self.config.get('moderator_role_ids', [])
-        return any(role.id in moderator_role_ids for role in interaction.user.roles)
+        user_roles = [role.id for role in interaction.user.roles]
+        return any(role_id in user_roles for role_id in moderator_role_ids)
     
-    @discord.ui.button(label='📋 Рассмотреть', style=discord.ButtonStyle.primary, custom_id='review')
+    @discord.ui.button(label='📋 Рассмотреть', style=discord.ButtonStyle.primary, custom_id='review_app')
     async def review_button(self, interaction: discord.Interaction, button: Button):
         """Взять заявку на рассмотрение"""
         if not self._check_permissions(interaction):
@@ -309,7 +316,7 @@ class ApplicationReviewView(View):
         # Логирование
         await self._log_action(interaction.user, self.user_id, "взял на рассмотрение")
     
-    @discord.ui.button(label='✅ Одобрить', style=discord.ButtonStyle.success, custom_id='approve')
+    @discord.ui.button(label='✅ Одобрить', style=discord.ButtonStyle.success, custom_id='approve_app')
     async def approve_button(self, interaction: discord.Interaction, button: Button):
         """Одобрить заявку"""
         if not self._check_permissions(interaction):
@@ -323,33 +330,47 @@ class ApplicationReviewView(View):
         guild = interaction.guild
         member = guild.get_member(self.user_id)
         
+        if not member:
+            await interaction.response.send_message(
+                '❌ Пользователь не найден на сервере.',
+                ephemeral=True
+            )
+            return
+        
         # Выдаем роль Price Academy
         member_role_id = self.config.get('member_role_id')
-        if member and member_role_id:
+        if member_role_id:
             role = guild.get_role(member_role_id)
             if role:
                 try:
                     await member.add_roles(role)
                 except discord.Forbidden:
                     await interaction.response.send_message(
-                        'Не удалось выдать роль. Проверьте права бота.',
+                        '❌ Не удалось выдать роль. Проверьте права бота.',
                         ephemeral=True
                     )
+                    return
+                except Exception as e:
+                    await interaction.response.send_message(
+                        f'❌ Ошибка при выдаче роли: {e}',
+                        ephemeral=True
+                    )
+                    return
         
         # Уведомляем пользователя
         approve_embed = discord.Embed(
-            title='Заявка одобрена',
+            title='✅ Заявка одобрена',
             description='Поздравляем! Вы приняты в **Price FamQ**',
             color=self.config.get_color('success'),
             timestamp=datetime.now()
         )
         
         logo_url = self.config.get('logo_url')
-        if logo_url != "https://i.imgur.com/your_logo.png":
+        if logo_url and logo_url.startswith('http'):
             approve_embed.set_thumbnail(url=logo_url)
         
         approve_embed.add_field(
-            name='Добро пожаловать',
+            name='🎉 Добро пожаловать',
             value='Вам выдана роль **Price Academy**. Начните свой путь в семье!',
             inline=False
         )
@@ -364,7 +385,7 @@ class ApplicationReviewView(View):
         embed = interaction.message.embeds[0]
         embed.color = self.config.get_color('success')
         embed.add_field(
-            name='Статус',
+            name='✅ Статус',
             value=f'Одобрена • {interaction.user.mention}',
             inline=False
         )
@@ -375,11 +396,11 @@ class ApplicationReviewView(View):
         await self._log_action(interaction.user, self.user_id, "одобрил")
         
         await interaction.response.send_message(
-            f'Заявка одобрена. {user.mention} получил роль Price Academy.',
+            f'✅ Заявка одобрена. {user.mention} получил роль Price Academy.',
             ephemeral=True
         )
     
-    @discord.ui.button(label='❌ Отклонить', style=discord.ButtonStyle.danger, custom_id='reject')
+    @discord.ui.button(label='❌ Отклонить', style=discord.ButtonStyle.danger, custom_id='reject_app')
     async def reject_button(self, interaction: discord.Interaction, button: Button):
         """Отклонить заявку"""
         if not self._check_permissions(interaction):
@@ -420,8 +441,8 @@ class ApplicationReviewView(View):
             color=color_map.get(action, self.config.get_color('info')),
             timestamp=datetime.now()
         )
-        embed.add_field(name='Модератор', value=moderator.mention, inline=True)
-        embed.add_field(name='Заявитель', value=applicant.mention, inline=True)
+        embed.add_field(name='👤 Модератор', value=moderator.mention, inline=True)
+        embed.add_field(name='👥 Заявитель', value=applicant.mention, inline=True)
         
         try:
             await logs_channel.send(embed=embed)
@@ -439,7 +460,7 @@ class ApplicationButton(View):
     @discord.ui.button(
         label='📝 Подать заявку в семью',
         style=discord.ButtonStyle.primary,
-        custom_id='apply',
+        custom_id='apply_family',
         emoji='✨'
     )
     async def apply_button(self, interaction: discord.Interaction, button: Button):
@@ -465,37 +486,34 @@ class Applications(commands.Cog):
     async def setup_application(self, ctx):
         """Создает сообщение с кнопкой подачи заявки"""
         embed = discord.Embed(
-            title='Заявка в Price FamQ',
+            title='📝 Заявка в Price FamQ',
             description='Хочешь стать частью нашей семьи? Заполни заявку ниже.',
             color=self.config.get_color('primary')
         )
         
         logo_url = self.config.get('logo_url')
-        if logo_url != "https://i.imgur.com/your_logo.png":
+        
+        # Безопасная установка изображений
+        if logo_url and logo_url.startswith('http'):
             embed.set_thumbnail(url=logo_url)
+            embed.set_image(url=logo_url)
         
         embed.add_field(
-            name='Требования',
+            name='📋 Требования',
             value='• Возраст 16+\n• Микрофон обязателен\n• Знание основ RP\n• Активность на сервере',
             inline=False
         )
         
         embed.add_field(
-            name='После одобрения',
+            name='🎉 После одобрения',
             value='Вы получите роль **Price Academy** и сможете начать свой путь в семье.',
             inline=False
         )
         
         embed.set_footer(
             text='Price FamQ • Нажми на кнопку ниже',
-            icon_url=logo_url if logo_url != "https://i.imgur.com/your_logo.png" else None
+            icon_url=logo_url if logo_url and logo_url.startswith('http') else None
         )
-        
-        if logo_url != "https://i.imgur.com/your_logo.png":
-            embed.set_image(url=logo_url)
-        
-        if logo_url != "https://i.imgur.com/your_logo.png":
-            embed.set_image(url=logo_url)
         
         view = ApplicationButton(self.bot)
         await ctx.send(embed=embed, view=view)
