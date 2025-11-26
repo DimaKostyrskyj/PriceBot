@@ -53,10 +53,10 @@ class ConfigCommands(commands.Cog):
             
             embed.add_field(
                 name='🎭 Роли',
-                value=f'**Модераторы (REC):** {mod_roles_text}\n'
-                      f'**Участник (Price Academy):** {f"<@&{member_role}>" if member_role else "Не настроена"}\n'
-                      f'**Авто-роль (Friends):** {f"<@&{auto_role}>" if auto_role else "Не настроена"}\n'
-                      f'**Dev:** {dev_roles_text}\n'
+                value=f'**Рекруты (REC):** {mod_roles_text}\n'
+                      f'**Участник (Family):** {f"<@&{member_role}>" if member_role else "Не настроена"}\n'
+                      f'**Авто-роль (Guest):** {f"<@&{auto_role}>" if auto_role else "Не настроена"}\n'
+                      f'**Developer:** {dev_roles_text}\n'
                       f'**Owner:** {owner_roles_text}',
                 inline=False
             )
