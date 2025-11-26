@@ -108,10 +108,20 @@ class ApplicationForm(Modal, title='Заявка в Price FamQ'):
             icon_url=logo_url if logo_url != "https://i.imgur.com/your_logo.png" else None
         )
         
-        # Создаем текстовое сообщение перед embed
-        message_text = f"Заявка от {interaction.user.mention} <@1435583363724476486>"
-        
-        await review_channel.send(content=message_text, embed=embed, view=view)
+       # Получаем ID ролей модераторов для упоминания
+        moderator_role_ids = self.config.get('moderator_role_ids', [])
+        mention_roles = []
+
+        for role_id in moderator_role_ids:
+            role = review_channel.guild.get_role(role_id)
+            if role:
+                mention_roles.append(role.mention)
+
+        # Создаем текстовое сообщение с упоминанием ролей
+        mention_text = " ".join(mention_roles) if mention_roles else "@here"
+        message_content = f"{mention_text} 📝 Новая заявка!"
+
+        await review_channel.send(content=message_content, embed=embed, view=view)
         # Создаем кнопки для рассмотрения
         view = ApplicationReviewView(self.bot, interaction.user.id)
         
