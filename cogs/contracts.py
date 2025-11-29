@@ -6,13 +6,14 @@ from discord.ui import Modal, TextInput, View, Button
 from datetime import datetime
 from utils.config_manager import ConfigManager
 
+
 class ContractView(View):
     """View с кнопками для контракта"""
     
-    def __init__(self, message, participants=None):
+    def __init__(self, message=None, participants=None):
         super().__init__(timeout=None)
         self.message = message
-        self.participants = participants or []
+        self.participants = participants if participants is not None else []
         self.config = ConfigManager()
         self.started = False
     
@@ -97,22 +98,11 @@ class ContractView(View):
             )
             return
         
-        # Убираем все кнопки кроме "Закончить"
-        self.clear_items()
-        
-        # Создаем новую кнопку "Закончить"
-        finish_button = Button(
-            label='Закончить',
-            style=discord.ButtonStyle.danger,
-            emoji='⏹️',
-            custom_id='contract_finish'
-        )
-        self.add_item(finish_button)
-        
         self.started = True
         
         # Обновляем embed
-        embed = self.message.embeds[0]
+        message = interaction.message
+        embed = message.embeds[0]
         
         # Меняем статус
         for i, field in enumerate(embed.fields):
@@ -125,7 +115,10 @@ class ContractView(View):
                 )
                 break
         
-        await self.message.edit(embed=embed, view=self)
+        # Создаем новый View только с кнопкой "Закончить"
+        new_view = ContractFinishView()
+        
+        await message.edit(embed=embed, view=new_view)
         
         await interaction.response.send_message(
             f'✅ Контракт начат! Начал: {interaction.user.mention}',
@@ -134,7 +127,8 @@ class ContractView(View):
     
     async def update_embed(self, interaction: discord.Interaction):
         """Обновление embed с участниками"""
-        embed = self.message.embeds[0]
+        message = interaction.message
+        embed = message.embeds[0]
         
         # Формируем список участников
         if self.participants:
@@ -144,7 +138,7 @@ class ContractView(View):
                 if user:
                     participants_list.append(f"✅ {user.mention}")
             
-            participants_text = "\n".join(participants_list)
+            participants_text = "\n".join(participants_list) if participants_list else "❌ Пока нет участников"
         else:
             participants_text = "❌ Пока нет участников"
         
@@ -159,7 +153,65 @@ class ContractView(View):
                 )
                 break
         
-        await self.message.edit(embed=embed, view=self)
+        await message.edit(embed=embed, view=self)
+
+
+class ContractFinishView(View):
+    """View с кнопкой завершения контракта"""
+    
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.config = ConfigManager()
+    
+    @discord.ui.button(
+        label='Закончить',
+        style=discord.ButtonStyle.danger,
+        emoji='⏹️',
+        custom_id='contract_finish'
+    )
+    async def finish_button(self, interaction: discord.Interaction, button: Button):
+        """Кнопка завершения контракта"""
+        # Проверяем права
+        contract_role_id = self.config.get('contract_role_id', 0)
+        owner_role_ids = self.config.get('owner_role_ids', [])
+        
+        user_role_ids = [role.id for role in interaction.user.roles]
+        
+        has_permission = False
+        if contract_role_id and contract_role_id in user_role_ids:
+            has_permission = True
+        if any(role_id in user_role_ids for role_id in owner_role_ids):
+            has_permission = True
+        
+        if not has_permission:
+            await interaction.response.send_message(
+                '❌ У вас нет прав для завершения контракта!',
+                ephemeral=True
+            )
+            return
+        
+        # Обновляем embed
+        message = interaction.message
+        embed = message.embeds[0]
+        
+        # Меняем статус на завершен
+        for i, field in enumerate(embed.fields):
+            if "Статус:" in field.name:
+                embed.set_field_at(
+                    i,
+                    name="🔴 Статус:",
+                    value="✅ Контракт завершен!",
+                    inline=False
+                )
+                break
+        
+        # Убираем все кнопки
+        await message.edit(embed=embed, view=None)
+        
+        await interaction.response.send_message(
+            f'✅ Контракт завершен! Завершил: {interaction.user.mention}',
+            ephemeral=False
+        )
 
 
 class ContractPublishModal(Modal):
@@ -357,8 +409,8 @@ class ContractPublishModal(Modal):
             content = " ".join(role_mentions) + "\n\n" if role_mentions else ""
             role_name_text = " и ".join(role_names) if role_names else "не найдены"
             
-            # Создаем View с кнопками
-            view = ContractView(None, [])
+            # Создаем View с кнопками (включая кнопку "Начать контракт")
+            view = ContractView()
             
             # Отправляем контракт с кнопками
             message = await members_channel.send(content=content, embed=embed, view=view)
@@ -378,6 +430,17 @@ class ContractPublishModal(Modal):
                 print(f"✅ Ветка создана для контракта {self.contract_name.value}")
             except Exception as e:
                 print(f"❌ Ошибка создания ветки: {e}")
+            
+            # Автоматически добавляем кнопку создания контракта после каждого контракта
+            request_embed = discord.Embed(
+                title='📋 Создать контракт',
+                description='Нажмите кнопку ниже, чтобы создать новый контракт.',
+                color=0x2b2d31
+            )
+            request_embed.set_footer(text='Price FamQ')
+            
+            request_view = ContractRequestButtonPersistent()
+            await members_channel.send(embed=request_embed, view=request_view)
             
             await interaction.response.send_message(
                 f"✅ Контракт \"{self.contract_name.value}\" успешно опубликован! Тегнуты роли: **{role_name_text}**",
@@ -566,6 +629,22 @@ class ContractRequestButton(View):
         await interaction.response.send_modal(ContractRequestForm(self.bot, self.channel_id))
 
 
+class ContractRequestButtonPersistent(View):
+    """Персистентная кнопка для создания контракта (появляется после каждого контракта)"""
+    
+    def __init__(self):
+        super().__init__(timeout=None)
+    
+    @discord.ui.button(
+        label='📋 Создать контракт',
+        style=discord.ButtonStyle.success,
+        custom_id='contract_create_persistent'
+    )
+    async def create_button(self, interaction: discord.Interaction, button: Button):
+        """Обработка нажатия кнопки - открывает форму создания контракта"""
+        await interaction.response.send_modal(ContractPublishModal())
+
+
 class ContractCreateButton(View):
     """Кнопка для открытия формы создания контракта"""
     
@@ -591,60 +670,12 @@ class Contracts(commands.Cog):
         self.pinned_message_id = None
         
         # Регистрируем персистентные View
-        self.bot.add_view(ContractView(None, []))
+        self.bot.add_view(ContractView())
+        self.bot.add_view(ContractFinishView())
+        self.bot.add_view(ContractRequestButtonPersistent())
         
         # Запускаем таск автозакрепления
         self.auto_pin_task.start()
-    
-    @commands.Cog.listener()
-    async def on_interaction(self, interaction: discord.Interaction):
-        """Обработка нажатий кнопок"""
-        if interaction.type != discord.InteractionType.component:
-            return
-        
-        # Обработка кнопки "Закончить"
-        if interaction.data.get('custom_id') == 'contract_finish':
-            # Проверяем права
-            contract_role_id = self.config.get('contract_role_id', 0)
-            owner_role_ids = self.config.get('owner_role_ids', [])
-            
-            user_role_ids = [role.id for role in interaction.user.roles]
-            
-            has_permission = False
-            if contract_role_id and contract_role_id in user_role_ids:
-                has_permission = True
-            if any(role_id in user_role_ids for role_id in owner_role_ids):
-                has_permission = True
-            
-            if not has_permission:
-                await interaction.response.send_message(
-                    '❌ У вас нет прав для завершения контракта!',
-                    ephemeral=True
-                )
-                return
-            
-            # Обновляем embed
-            message = interaction.message
-            embed = message.embeds[0]
-            
-            # Меняем статус на завершен
-            for i, field in enumerate(embed.fields):
-                if "Статус:" in field.name:
-                    embed.set_field_at(
-                        i,
-                        name="🔴 Статус:",
-                        value="✅ Контракт завершен!",
-                        inline=False
-                    )
-                    break
-            
-            # Убираем все кнопки
-            await message.edit(embed=embed, view=None)
-            
-            await interaction.response.send_message(
-                f'✅ Контракт завершен! Завершил: {interaction.user.mention}',
-                ephemeral=False
-            )
     
     def cog_unload(self):
         """Остановка таска при выгрузке модуля"""
