@@ -1,23 +1,31 @@
 {
     "prefix": "!",
     "welcome_channel_id": 0,
-    "application_channel_id": 0,
-    "review_channel_id": 0,
-    "logs_channel_id": 0,
-    "contracts_channel_id": 0,
-    "contracts_members_channel_id": 0,
-    "contract_role_id": 0,
-    "family_role_id": 0,
-    "moderator_role_ids": [],
-    "member_role_id": 0,
-    "auto_role_id": 0,
+    "application_channel_id": 1435561530602164265,
+    "review_channel_id": 1435578955032957018,
+    "logs_channel_id": 1435639585517342842,
+    "contracts_channel_id": 1437459474314170549,
+    "contracts_members_channel_id": 1437459644292272219,
+    "contract_role_id": [
+        1443939490031734855,
+        1437465795230961736
+    ],
+    "family_role_id": 1435008951224897610,
+    "moderator_role_ids": [
+        1443709106866356326,
+        1435583363724476486
+    ],
+    "member_role_id": 1436527374572191794,
+    "auto_role_id": 1435636808875511849,
     "dev_role_ids": [
         1443025395241848985
     ],
     "owner_role_ids": [
         1434974689263882401
     ],
-    "dep_owner_role_ids": [],
+    "dep_owner_role_ids": [
+        1434998410850598913
+    ],
     "logo_url": "https://cdn.discordapp.com/attachments/1255612946952753286/1443000704552665272/Black_White_Minimal_Modern_Simple_Bold_Business_Mag_Logo_3.png",
     "colors": {
         "primary": "0x2F3136",
