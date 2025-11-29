@@ -1,0 +1,39 @@
+{
+    "prefix": "!",
+    "welcome_channel_id": 0,
+    "application_channel_id": 0,
+    "review_channel_id": 0,
+    "logs_channel_id": 0,
+    "contracts_channel_id": 0,
+    "contracts_members_channel_id": 0,
+    "contract_role_id": 0,
+    "family_role_id": 0,
+    "moderator_role_ids": [],
+    "member_role_id": 0,
+    "auto_role_id": 0,
+    "dev_role_ids": [
+        1443025395241848985
+    ],
+    "owner_role_ids": [
+        1434974689263882401
+    ],
+    "dep_owner_role_ids": [],
+    "logo_url": "https://cdn.discordapp.com/attachments/1255612946952753286/1443000704552665272/Black_White_Minimal_Modern_Simple_Bold_Business_Mag_Logo_3.png",
+    "colors": {
+        "primary": "0x2F3136",
+        "success": "0x43B581",
+        "error": "0xF04747",
+        "warning": "0xFAA61A",
+        "info": "0x5865F2"
+    },
+    "_comments": {
+        "auto_role": "Guest - выдается при входе на сервер",
+        "member_role": "Price Academy - выдается при одобрении заявки",
+        "family_role": "Family - упоминается в публикации контрактов",
+        "contract_role": "Contract - для управления контрактами",
+        "moderator_roles": "REC - для рассмотрения заявок",
+        "dev_roles": "Developer - для доступа к логам и командам",
+        "dep_owner_roles": "Dep.Owner - заместитель владельца",
+        "owner_roles": "Owner - полный доступ"
+    }
+}

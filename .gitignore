@@ -1,6 +1,5 @@
 # Секретные данные
 .env
-config.json
 
 # Логи
 logs/
