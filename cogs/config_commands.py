@@ -663,6 +663,29 @@ class ConfigCommands(commands.Cog):
                 return None
         except ValueError:
             return None
+        
+    def parse_role(self, value: str, ctx):
+        """Парсинг роли из упоминания, ID или имени"""
+        try:
+            # Если это упоминание роли (<@&123456789>)
+            if value.startswith('<@&') and value.endswith('>'):
+                role_id = int(value[3:-1])
+                role = ctx.guild.get_role(role_id)
+                return role.id if role else None
+            
+            # Если это числовой ID
+            if value.isdigit():
+                role_id = int(value)
+                role = ctx.guild.get_role(role_id)
+                return role.id if role else None
+            
+            # Поиск по имени (убираем @ если есть)
+            role_name = value.lstrip('@')
+            role = discord.utils.get(ctx.guild.roles, name=role_name)
+            return role.id if role else None
+            
+        except (ValueError, AttributeError):
+            return None
 
 
 async def setup(bot):
