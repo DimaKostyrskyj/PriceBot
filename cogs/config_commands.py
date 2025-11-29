@@ -2,6 +2,7 @@
 import discord
 from discord.ext import commands
 from utils.config_manager import ConfigManager
+from utils.permissions import permissions
 
 class ConfigCommands(commands.Cog):
     """Модуль команд настройки бота"""
@@ -10,535 +11,658 @@ class ConfigCommands(commands.Cog):
         self.bot = bot
         self.config = ConfigManager()
     
-    @commands.command(name='config')
-    @commands.has_permissions(administrator=True)
-    async def configure(self, ctx, setting: str = None, value: str = None):
+    def check_permissions(self, ctx):
+        """Проверка прав доступа к команде config"""
+        return permissions.can_use_config(ctx.author)
+    
+    @commands.command(name='roles')
+    async def manage_roles(self, ctx, action: str = None, role_type: str = None, value: str = None):
         """
-        Настройка бота
-        Использование: !config [setting] [value]
+        Управление ролями бота
+        !roles - показать все роли
+        !roles add owner @роль - добавить роль Owner
+        !roles remove owner @роль - удалить роль Owner
+        !roles clear owner - очистить все роли Owner
         """
-        if not setting:
-            # Показываем текущие настройки
+        # Проверка прав
+        if not self.check_permissions(ctx):
             embed = discord.Embed(
-                title='⚙️ Конфигурация бота Price FamQ',
-                description='Текущие настройки:',
-                color=self.config.get_color('primary')
+                title='❌ Нет доступа',
+                description='У вас нет прав для использования этой команды!\n\n'
+                           '**Требуется роль:** Owner или Developer',
+                color=self.config.get_color('error')
             )
-            
-            # Каналы
-            welcome_ch = self.config.get('welcome_channel_id')
-            app_ch = self.config.get('application_channel_id')
-            review_ch = self.config.get('review_channel_id')
-            logs_ch = self.config.get('logs_channel_id')
-            
-            embed.add_field(
-                name='📺 Каналы',
-                value=f'**Приветствие:** {f"<#{welcome_ch}>" if welcome_ch else "Не настроен"}\n'
-                      f'**Заявки:** {f"<#{app_ch}>" if app_ch else "Не настроен"}\n'
-                      f'**Рассмотрение:** {f"<#{review_ch}>" if review_ch else "Не настроен"}\n'
-                      f'**Логи:** {f"<#{logs_ch}>" if logs_ch else "Не настроен"}',
-                inline=False
-            )
-            
-            # Роли
-            mod_roles = self.config.get('moderator_role_ids', [])
-            member_role = self.config.get('member_role_id')
-            auto_role = self.config.get('auto_role_id')
-            dev_roles = self.config.get('dev_role_ids', [])
-            owner_roles = self.config.get('owner_role_ids', [])
-            
-            mod_roles_text = ', '.join([f'<@&{r}>' for r in mod_roles]) if mod_roles else 'Не настроены'
-            dev_roles_text = ', '.join([f'<@&{r}>' for r in dev_roles]) if dev_roles else 'Не настроены'
-            owner_roles_text = ', '.join([f'<@&{r}>' for r in owner_roles]) if owner_roles else 'Не настроены'
-            
-            embed.add_field(
-                name='🎭 Роли',
-                value=f'**Рекруты (REC):** {mod_roles_text}\n'
-                      f'**Участник (Family):** {f"<@&{member_role}>" if member_role else "Не настроена"}\n'
-                      f'**Авто-роль (Guest):** {f"<@&{auto_role}>" if auto_role else "Не настроена"}\n'
-                      f'**Developer:** {dev_roles_text}\n'
-                      f'**Owner:** {owner_roles_text}',
-                inline=False
-            )
-            
-            # Логотип
-            logo_url = self.config.get('logo_url')
-            logo_status = '✅ Настроен' if logo_url != "https://i.imgur.com/your_logo.png" else '❌ Не настроен'
-            embed.add_field(name='🎨 Логотип', value=logo_status, inline=False)
-            
-            # Команды
-            embed.add_field(
-                name='📝 Команды настройки',
-                value='```\n'
-                      '!config welcome_channel #канал или ID\n'
-                      '!config application_channel #канал или ID\n'
-                      '!config review_channel #канал или ID\n'
-                      '!config logs_channel #канал или ID\n'
-                      '!config moderator_role @роль или ID (REC)\n'
-                      '!config member_role @роль или ID (Price Academy)\n'
-                      '!config auto_role @роль или ID (Friends)\n'
-                      '!config dev_role @роль или ID\n'
-                      '!config owner_role @роль или ID\n'
-                      '!config logo <URL>\n'
-                      '```',
-                inline=False
-            )
-            
             await ctx.send(embed=embed)
             return
         
-        # Обработка настроек
-        # Каналы - принимаем как упоминание, так и ID
-        if setting == 'welcome_channel':
-            if ctx.message.channel_mentions:
-                channel_id = ctx.message.channel_mentions[0].id
-                channel = ctx.message.channel_mentions[0]
-            elif value and value.isdigit():
-                channel_id = int(value)
-                channel = self.bot.get_channel(channel_id)
-            else:
-                await ctx.send('❌ Укажите канал (#канал) или ID канала')
+        # Показать все роли
+        if not action:
+            await self.show_all_roles(ctx)
+            return
+        
+        # Добавить роль
+        if action == 'add':
+            if not role_type or not value:
+                await ctx.send("❌ Использование: `!roles add <тип_роли> @роль`")
                 return
-            
-            self.config.set('welcome_channel_id', channel_id)
-            await ctx.send(f'✅ Канал приветствия установлен: {channel.mention if channel else f"ID: {channel_id}"}')
+            await self.add_role(ctx, role_type, value)
         
-        elif setting == 'application_channel':
-            if ctx.message.channel_mentions:
-                channel_id = ctx.message.channel_mentions[0].id
-                channel = ctx.message.channel_mentions[0]
-            elif value and value.isdigit():
-                channel_id = int(value)
-                channel = self.bot.get_channel(channel_id)
-            else:
-                await ctx.send('❌ Укажите канал (#канал) или ID канала')
+        # Удалить роль
+        elif action == 'remove':
+            if not role_type or not value:
+                await ctx.send("❌ Использование: `!roles remove <тип_роли> @роль`")
                 return
-            
-            self.config.set('application_channel_id', channel_id)
-            await ctx.send(f'✅ Канал заявок установлен: {channel.mention if channel else f"ID: {channel_id}"}')
+            await self.remove_role(ctx, role_type, value)
         
-        elif setting == 'review_channel':
-            if ctx.message.channel_mentions:
-                channel_id = ctx.message.channel_mentions[0].id
-                channel = ctx.message.channel_mentions[0]
-            elif value and value.isdigit():
-                channel_id = int(value)
-                channel = self.bot.get_channel(channel_id)
-            else:
-                await ctx.send('❌ Укажите канал (#канал) или ID канала')
+        # Очистить все роли
+        elif action == 'clear':
+            if not role_type:
+                await ctx.send("❌ Использование: `!roles clear <тип_роли>`")
                 return
-            
-            self.config.set('review_channel_id', channel_id)
-            await ctx.send(f'✅ Канал рассмотрения установлен: {channel.mention if channel else f"ID: {channel_id}"}')
-        
-        elif setting == 'logs_channel':
-            if ctx.message.channel_mentions:
-                channel_id = ctx.message.channel_mentions[0].id
-                channel = ctx.message.channel_mentions[0]
-            elif value and value.isdigit():
-                channel_id = int(value)
-                channel = self.bot.get_channel(channel_id)
-            else:
-                await ctx.send('❌ Укажите канал (#канал) или ID канала')
-                return
-            
-            self.config.set('logs_channel_id', channel_id)
-            await ctx.send(f'✅ Канал логов установлен: {channel.mention if channel else f"ID: {channel_id}"}')
-        
-        # Роли - принимаем как упоминание, так и ID
-        elif setting == 'moderator_role':
-            if ctx.message.role_mentions:
-                role_id = ctx.message.role_mentions[0].id
-                role = ctx.message.role_mentions[0]
-            elif value and value.isdigit():
-                role_id = int(value)
-                role = ctx.guild.get_role(role_id)
-            else:
-                await ctx.send('❌ Укажите роль (@роль) или ID роли')
-                return
-            
-            moderator_roles = self.config.get('moderator_role_ids', [])
-            if role_id not in moderator_roles:
-                moderator_roles.append(role_id)
-                self.config.set('moderator_role_ids', moderator_roles)
-            await ctx.send(f'✅ Роль модератора добавлена: {role.mention if role else f"ID: {role_id}"}')
-        
-        elif setting == 'member_role':
-            if ctx.message.role_mentions:
-                role_id = ctx.message.role_mentions[0].id
-                role = ctx.message.role_mentions[0]
-            elif value and value.isdigit():
-                role_id = int(value)
-                role = ctx.guild.get_role(role_id)
-            else:
-                await ctx.send('❌ Укажите роль (@роль) или ID роли')
-                return
-            
-            self.config.set('member_role_id', role_id)
-            await ctx.send(f'✅ Роль Price Academy установлена: {role.mention if role else f"ID: {role_id}"}')
-        
-        elif setting == 'auto_role':
-            if ctx.message.role_mentions:
-                role_id = ctx.message.role_mentions[0].id
-                role = ctx.message.role_mentions[0]
-            elif value and value.isdigit():
-                role_id = int(value)
-                role = ctx.guild.get_role(role_id)
-            else:
-                await ctx.send('❌ Укажите роль (@роль) или ID роли')
-                return
-            
-            self.config.set('auto_role_id', role_id)
-            await ctx.send(f'✅ Авто-роль Friends установлена: {role.mention if role else f"ID: {role_id}"}\nБудет выдаваться при входе на сервер.')
-        
-        elif setting == 'dev_role':
-            if ctx.message.role_mentions:
-                role_id = ctx.message.role_mentions[0].id
-                role = ctx.message.role_mentions[0]
-            elif value and value.isdigit():
-                role_id = int(value)
-                role = ctx.guild.get_role(role_id)
-            else:
-                await ctx.send('❌ Укажите роль (@роль) или ID роли')
-                return
-            
-            dev_roles = self.config.get('dev_role_ids', [])
-            if role_id not in dev_roles:
-                dev_roles.append(role_id)
-                self.config.set('dev_role_ids', dev_roles)
-            await ctx.send(f'✅ Роль Dev добавлена: {role.mention if role else f"ID: {role_id}"}')
-        
-        elif setting == 'owner_role':
-            if ctx.message.role_mentions:
-                role_id = ctx.message.role_mentions[0].id
-                role = ctx.message.role_mentions[0]
-            elif value and value.isdigit():
-                role_id = int(value)
-                role = ctx.guild.get_role(role_id)
-            else:
-                await ctx.send('❌ Укажите роль (@роль) или ID роли')
-                return
-            
-            owner_roles = self.config.get('owner_role_ids', [])
-            if role_id not in owner_roles:
-                owner_roles.append(role_id)
-                self.config.set('owner_role_ids', owner_roles)
-            await ctx.send(f'✅ Роль Owner добавлена: {role.mention if role else f"ID: {role_id}"}')
-        
-        elif setting == 'logo' and value:
-            self.config.set('logo_url', value)
-            await ctx.send(f'✅ Логотип обновлен!\n{value}')
-        
-        elif setting == 'remove_moderator' and ctx.message.role_mentions:
-            moderator_roles = self.config.get('moderator_role_ids', [])
-            role_id = ctx.message.role_mentions[0].id
-            if role_id in moderator_roles:
-                moderator_roles.remove(role_id)
-                self.config.set('moderator_role_ids', moderator_roles)
-                await ctx.send(f'✅ Роль модератора удалена: {ctx.message.role_mentions[0].mention}')
-            else:
-                await ctx.send(f'❌ Эта роль не является ролью модератора')
-        
-        elif setting == 'remove_dev' and ctx.message.role_mentions:
-            dev_roles = self.config.get('dev_role_ids', [])
-            role_id = ctx.message.role_mentions[0].id
-            if role_id in dev_roles:
-                dev_roles.remove(role_id)
-                self.config.set('dev_role_ids', dev_roles)
-                await ctx.send(f'✅ Роль Dev удалена: {ctx.message.role_mentions[0].mention}')
-            else:
-                await ctx.send(f'❌ Эта роль не является ролью Dev')
-        
-        elif setting == 'remove_owner' and ctx.message.role_mentions:
-            owner_roles = self.config.get('owner_role_ids', [])
-            role_id = ctx.message.role_mentions[0].id
-            if role_id in owner_roles:
-                owner_roles.remove(role_id)
-                self.config.set('owner_role_ids', owner_roles)
-                await ctx.send(f'✅ Роль Owner удалена: {ctx.message.role_mentions[0].mention}')
-            else:
-                await ctx.send(f'❌ Эта роль не является ролью Owner')
+            await self.clear_roles(ctx, role_type)
         
         else:
-            await ctx.send('❌ Неверный формат команды. Используйте `!config` без параметров для справки.')
+            await ctx.send(f"❌ Неизвестное действие: `{action}`\n"
+                          f"Доступные действия: `add`, `remove`, `clear`")
     
-    @commands.command(name='help')
-    async def help_command(self, ctx):
-        """Показать список команд"""
+    async def show_all_roles(self, ctx):
+        """Показать все настроенные роли"""
         embed = discord.Embed(
-            title='📚 Команды бота Price FamQ',
-            description='Список доступных команд',
-            color=self.config.get_color('info')
+            title='🎭 Настроенные роли',
+            description='Все роли бота и их участники',
+            color=0x2b2d31,
+            timestamp=discord.utils.utcnow()
         )
         
-        # Команды для администраторов
-        admin_commands = [
-            '`!config` - Настройка бота',
-            '`!setup_application` - Создать кнопку заявки',
-            '`!reload` - Перезагрузить конфигурацию'
-        ]
+        def format_roles(role_ids):
+            if not role_ids:
+                return "`Не настроены`"
+            roles = []
+            for role_id in role_ids:
+                role = ctx.guild.get_role(role_id)
+                if role:
+                    roles.append(f"{role.mention} ({len(role.members)} чел.)")
+                else:
+                    roles.append(f"`ID: {role_id}` (не найдена)")
+            return "\n".join(roles)
+        
+        def format_single_role(role_id):
+            if not role_id:
+                return "`Не настроена`"
+            role = ctx.guild.get_role(role_id)
+            if role:
+                return f"{role.mention} ({len(role.members)} чел.)"
+            return f"`ID: {role_id}` (не найдена)"
+        
+        # Администрация
+        owner_roles = self.config.get('owner_role_ids', [])
+        dep_owner_roles = self.config.get('dep_owner_role_ids', [])
+        dev_roles = self.config.get('dev_role_ids', [])
+        
+        admin_text = (
+            f"**Owner:**\n{format_roles(owner_roles)}\n\n"
+            f"**Dep.Owner:**\n{format_roles(dep_owner_roles)}\n\n"
+            f"**Developer:**\n{format_roles(dev_roles)}"
+        )
+        
         embed.add_field(
-            name='👑 Команды администратора',
-            value='\n'.join(admin_commands),
+            name="👑 Администрация",
+            value=admin_text,
             inline=False
         )
         
-        # Команды для Dev/Owner
-        if any(role.id in self.config.get('dev_role_ids', []) + self.config.get('owner_role_ids', []) 
-               for role in ctx.author.roles):
-            dev_commands = [
-                '`!download_logs [дни]` - Скачать логи',
-                '`!logs_stats` - Статистика логов',
-                '`!clear_logs` - Очистить логи (Owner)'
-            ]
-            embed.add_field(
-                name='🛠️ Команды Dev/Owner',
-                value='\n'.join(dev_commands),
-                inline=False
-            )
+        # Модераторы
+        contract_role = self.config.get('contract_role_id')
+        mod_roles = self.config.get('moderator_role_ids', [])
         
-        # Информация
+        mod_text = (
+            f"**Contract:**\n{format_single_role(contract_role)}\n\n"
+            f"**REC:**\n{format_roles(mod_roles)}"
+        )
+        
         embed.add_field(
-            name='ℹ️ Информация',
-            value='Для подробной настройки используйте `!config` без параметров',
+            name="👥 Модераторы",
+            value=mod_text,
             inline=False
         )
         
-        embed.set_footer(text='Price FamQ • GTA 5 RP')
+        # Участники
+        family_role = self.config.get('family_role_id')
+        member_role = self.config.get('member_role_id')
+        auto_role = self.config.get('auto_role_id')
+        
+        member_text = (
+            f"**Family:**\n{format_single_role(family_role)}\n\n"
+            f"**Price Academy:**\n{format_single_role(member_role)}\n\n"
+            f"**Guest (авто):**\n{format_single_role(auto_role)}"
+        )
+        
+        embed.add_field(
+            name="🎮 Участники",
+            value=member_text,
+            inline=False
+        )
+        
+        # Команды управления
+        embed.add_field(
+            name="📝 Команды",
+            value=(
+                "`!roles add owner @роль` - Добавить\n"
+                "`!roles remove owner @роль` - Удалить\n"
+                "`!roles clear owner` - Очистить все"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text=f"Запросил: {ctx.author.name}")
         
         await ctx.send(embed=embed)
     
-    @commands.command(name='reload')
-    @commands.has_permissions(administrator=True)
-    async def reload_config(self, ctx):
-        """Перезагрузить конфигурацию"""
-        try:
-            self.config.reload()
-            
-            # Перезагружаем конфигурацию во всех cog
-            for cog in self.bot.cogs.values():
-                if hasattr(cog, 'config'):
-                    cog.config.reload()
-            
+    async def add_role(self, ctx, role_type: str, value: str):
+        """Добавить роль"""
+        role_id = self.parse_role(value, ctx)
+        if not role_id:
+            await ctx.send("❌ Роль не найдена!")
+            return
+        
+        role = ctx.guild.get_role(role_id)
+        role_mention = role.mention if role else f"`ID: {role_id}`"
+        
+        # Множественные роли
+        if role_type in ['owner', 'owners']:
+            current = self.config.get('owner_role_ids', [])
+            if role_id in current:
+                await ctx.send(f"⚠️ Роль {role_mention} уже добавлена как Owner")
+                return
+            current.append(role_id)
+            self.config.set('owner_role_ids', current)
+            await ctx.send(f"✅ Роль Owner добавлена: {role_mention}")
+        
+        elif role_type in ['dep_owner', 'depowner', 'dep']:
+            current = self.config.get('dep_owner_role_ids', [])
+            if role_id in current:
+                await ctx.send(f"⚠️ Роль {role_mention} уже добавлена как Dep.Owner")
+                return
+            current.append(role_id)
+            self.config.set('dep_owner_role_ids', current)
+            await ctx.send(f"✅ Роль Dep.Owner добавлена: {role_mention}")
+        
+        elif role_type in ['developer', 'dev']:
+            current = self.config.get('dev_role_ids', [])
+            if role_id in current:
+                await ctx.send(f"⚠️ Роль {role_mention} уже добавлена как Developer")
+                return
+            current.append(role_id)
+            self.config.set('dev_role_ids', current)
+            await ctx.send(f"✅ Роль Developer добавлена: {role_mention}")
+        
+        elif role_type in ['moderator', 'mod', 'rec']:
+            current = self.config.get('moderator_role_ids', [])
+            if role_id in current:
+                await ctx.send(f"⚠️ Роль {role_mention} уже добавлена как REC")
+                return
+            current.append(role_id)
+            self.config.set('moderator_role_ids', current)
+            await ctx.send(f"✅ Роль REC добавлена: {role_mention}")
+        
+        # Одиночные роли
+        elif role_type in ['contract']:
+            self.config.set('contract_role_id', role_id)
+            await ctx.send(f"✅ Роль Contract установлена: {role_mention}")
+        
+        elif role_type in ['family']:
+            self.config.set('family_role_id', role_id)
+            await ctx.send(f"✅ Роль Family установлена: {role_mention}")
+        
+        elif role_type in ['member', 'academy']:
+            self.config.set('member_role_id', role_id)
+            await ctx.send(f"✅ Роль Price Academy установлена: {role_mention}")
+        
+        elif role_type in ['auto', 'guest']:
+            self.config.set('auto_role_id', role_id)
+            await ctx.send(f"✅ Авто-роль Guest установлена: {role_mention}")
+        
+        else:
+            await ctx.send(f"❌ Неизвестный тип роли: `{role_type}`\n\n"
+                          f"Доступные типы: owner, dep_owner, dev, contract, rec, family, member, auto")
+    
+    async def remove_role(self, ctx, role_type: str, value: str):
+        """Удалить роль"""
+        role_id = self.parse_role(value, ctx)
+        if not role_id:
+            await ctx.send("❌ Роль не найдена!")
+            return
+        
+        role = ctx.guild.get_role(role_id)
+        role_mention = role.mention if role else f"`ID: {role_id}`"
+        
+        # Множественные роли
+        if role_type in ['owner', 'owners']:
+            current = self.config.get('owner_role_ids', [])
+            if role_id not in current:
+                await ctx.send(f"⚠️ Роль {role_mention} не найдена в списке Owner")
+                return
+            current.remove(role_id)
+            self.config.set('owner_role_ids', current)
+            await ctx.send(f"✅ Роль Owner удалена: {role_mention}")
+        
+        elif role_type in ['dep_owner', 'depowner', 'dep']:
+            current = self.config.get('dep_owner_role_ids', [])
+            if role_id not in current:
+                await ctx.send(f"⚠️ Роль {role_mention} не найдена в списке Dep.Owner")
+                return
+            current.remove(role_id)
+            self.config.set('dep_owner_role_ids', current)
+            await ctx.send(f"✅ Роль Dep.Owner удалена: {role_mention}")
+        
+        elif role_type in ['developer', 'dev']:
+            current = self.config.get('dev_role_ids', [])
+            if role_id not in current:
+                await ctx.send(f"⚠️ Роль {role_mention} не найдена в списке Developer")
+                return
+            current.remove(role_id)
+            self.config.set('dev_role_ids', current)
+            await ctx.send(f"✅ Роль Developer удалена: {role_mention}")
+        
+        elif role_type in ['moderator', 'mod', 'rec']:
+            current = self.config.get('moderator_role_ids', [])
+            if role_id not in current:
+                await ctx.send(f"⚠️ Роль {role_mention} не найдена в списке REC")
+                return
+            current.remove(role_id)
+            self.config.set('moderator_role_ids', current)
+            await ctx.send(f"✅ Роль REC удалена: {role_mention}")
+        
+        else:
+            await ctx.send(f"❌ Для одиночных ролей используйте `!roles clear {role_type}`")
+    
+    async def clear_roles(self, ctx, role_type: str):
+        """Очистить все роли типа"""
+        
+        if role_type in ['owner', 'owners']:
+            self.config.set('owner_role_ids', [])
+            await ctx.send(f"✅ Все роли Owner очищены!")
+        
+        elif role_type in ['dep_owner', 'depowner', 'dep']:
+            self.config.set('dep_owner_role_ids', [])
+            await ctx.send(f"✅ Все роли Dep.Owner очищены!")
+        
+        elif role_type in ['developer', 'dev']:
+            self.config.set('dev_role_ids', [])
+            await ctx.send(f"✅ Все роли Developer очищены!")
+        
+        elif role_type in ['moderator', 'mod', 'rec']:
+            self.config.set('moderator_role_ids', [])
+            await ctx.send(f"✅ Все роли REC очищены!")
+        
+        elif role_type in ['contract']:
+            self.config.set('contract_role_id', 0)
+            await ctx.send(f"✅ Роль Contract очищена!")
+        
+        elif role_type in ['family']:
+            self.config.set('family_role_id', 0)
+            await ctx.send(f"✅ Роль Family очищена!")
+        
+        elif role_type in ['member', 'academy']:
+            self.config.set('member_role_id', 0)
+            await ctx.send(f"✅ Роль Price Academy очищена!")
+        
+        elif role_type in ['auto', 'guest']:
+            self.config.set('auto_role_id', 0)
+            await ctx.send(f"✅ Авто-роль Guest очищена!")
+        
+        else:
+            await ctx.send(f"❌ Неизвестный тип роли: `{role_type}`")
+    
+    @commands.command(name='config')
+    async def configure(self, ctx, setting: str = None, value: str = None):
+        """
+        Настройка бота (только для Owner и Developer)
+        Использование: !config [setting] [value]
+        """
+        # Проверка прав
+        if not self.check_permissions(ctx):
             embed = discord.Embed(
-                title='🔄 Конфигурация перезагружена',
-                description='Все настройки были обновлены из config.json',
-                color=self.config.get_color('success')
+                title='❌ Нет доступа',
+                description='У вас нет прав для использования этой команды!\n\n'
+                           '**Требуется роль:** Owner или Developer',
+                color=self.config.get_color('error')
             )
             await ctx.send(embed=embed)
-        except Exception as e:
-            await ctx.send(f'❌ Ошибка при перезагрузке: {e}')
+            return
+        
+        if not setting:
+            # Показываем красивые настройки с таблицей прав
+            await self.show_config(ctx)
+            return
+        
+        # Обработка настройки
+        await self.update_setting(ctx, setting, value)
     
-    @commands.command(name='status')
-    async def status(self, ctx):
-        """Показать статус бота"""
-        embed = discord.Embed(
-            title='📊 Статус бота Price FamQ',
-            color=self.config.get_color('primary')
+    async def show_config(self, ctx):
+        """Показать текущую конфигурацию с таблицей прав"""
+        
+        # Первый embed - Настройки
+        embed1 = discord.Embed(
+            title='⚙️ Конфигурация Price FamQ Bot',
+            description='**Текущие настройки системы**',
+            color=0x2b2d31,
+            timestamp=discord.utils.utcnow()
         )
         
-        # Информация о боте
-        embed.add_field(name='🤖 Бот', value=self.bot.user.name, inline=True)
-        embed.add_field(name='🆔 ID', value=self.bot.user.id, inline=True)
-        embed.add_field(name='📡 Пинг', value=f'{round(self.bot.latency * 1000)}ms', inline=True)
         
-        # Статистика сервера
-        guild = ctx.guild
-        embed.add_field(name='👥 Участников', value=len(guild.members), inline=True)
-        embed.add_field(name='📺 Каналов', value=len(guild.channels), inline=True)
-        embed.add_field(name='🎭 Ролей', value=len(guild.roles), inline=True)
-        
-        # Модули
-        modules = len(self.bot.cogs)
-        embed.add_field(name='📦 Загружено модулей', value=modules, inline=True)
-        
-        logo_url = self.config.get('logo_url')
-        if logo_url != "https://i.imgur.com/your_logo.png":
-            embed.set_thumbnail(url=logo_url)
-        
-        embed.set_footer(text='Price FamQ • GTA 5 RP')
-        
-        await ctx.send(embed=embed)
-    
-    @commands.command(name='test')
-    @commands.has_permissions(administrator=True)
-    async def test_config(self, ctx):
-        """Тестирование всех настроек бота"""
-        embed = discord.Embed(
-            title='🧪 Тест конфигурации бота',
-            description='Проверка всех настроек и функций',
-            color=self.config.get_color('info')
-        )
-        
-        results = []
-        
-        # Проверка каналов
+        # Каналы
         welcome_ch = self.config.get('welcome_channel_id')
         app_ch = self.config.get('application_channel_id')
         review_ch = self.config.get('review_channel_id')
         logs_ch = self.config.get('logs_channel_id')
+        contracts_ch = self.config.get('contracts_channel_id')
+        contracts_members_ch = self.config.get('contracts_members_channel_id')
         
-        # Тест канала приветствия
-        if welcome_ch and self.bot.get_channel(welcome_ch):
-            results.append('✅ Канал приветствия настроен и доступен')
-            try:
-                channel = self.bot.get_channel(welcome_ch)
-                test_embed = discord.Embed(
-                    title='🧪 Тестовое сообщение',
-                    description='Это тестовое приветствие для проверки работы бота',
-                    color=self.config.get_color('primary')
-                )
-                await channel.send(embed=test_embed)
-                results.append('  └ Отправка сообщений работает')
-            except discord.Forbidden:
-                results.append('  └ ❌ Нет прав на отправку сообщений')
-        else:
-            results.append('❌ Канал приветствия не настроен или недоступен')
+        channels_text = (
+            f"**Приветствие:** {f'<#{welcome_ch}>' if welcome_ch else '`Не настроен`'}\n"
+            f"**Заявки:** {f'<#{app_ch}>' if app_ch else '`Не настроен`'}\n"
+            f"**Рассмотрение:** {f'<#{review_ch}>' if review_ch else '`Не настроен`'}\n"
+            f"**Логи:** {f'<#{logs_ch}>' if logs_ch else '`Не настроен`'}\n"
+            f"**Контракты (запросы):** {f'<#{contracts_ch}>' if contracts_ch else '`Не настроен`'}\n"
+            f"**Контракты (Members):** {f'<#{contracts_members_ch}>' if contracts_members_ch else '`Не настроен`'}"
+        )
         
-        # Тест канала заявок
-        if app_ch and self.bot.get_channel(app_ch):
-            results.append('✅ Канал заявок настроен и доступен')
-            try:
-                channel = self.bot.get_channel(app_ch)
-                permissions = channel.permissions_for(ctx.guild.me)
-                if permissions.send_messages and permissions.embed_links:
-                    results.append('  └ Права на отправку сообщений есть')
+        embed1.add_field(
+            name="📺 Каналы",
+            value=channels_text,
+            inline=False
+        )
+        
+        # Роли
+        def get_role_mention(role_id):
+            if role_id:
+                role = ctx.guild.get_role(role_id)
+                return role.mention if role else f"`ID: {role_id}`"
+            return "`Не настроена`"
+        
+        def get_roles_mention(role_ids):
+            if not role_ids:
+                return "`Не настроены`"
+            mentions = []
+            for role_id in role_ids:
+                role = ctx.guild.get_role(role_id)
+                if role:
+                    mentions.append(role.mention)
                 else:
-                    results.append('  └ ❌ Недостаточно прав')
-            except:
-                results.append('  └ ❌ Ошибка проверки прав')
-        else:
-            results.append('❌ Канал заявок не настроен или недоступен')
+                    mentions.append(f"`ID: {role_id}`")
+            return ", ".join(mentions) if mentions else "`Не настроены`"
         
-        # Тест канала рассмотрения
-        if review_ch and self.bot.get_channel(review_ch):
-            results.append('✅ Канал рассмотрения настроен и доступен')
-        else:
-            results.append('❌ Канал рассмотрения не настроен или недоступен')
-        
-        # Тест канала логов
-        if logs_ch and self.bot.get_channel(logs_ch):
-            results.append('✅ Канал логов настроен и доступен')
-            try:
-                channel = self.bot.get_channel(logs_ch)
-                test_log = discord.Embed(
-                    title='🧪 Тестовый лог',
-                    description='Проверка работы системы логирования',
-                    color=self.config.get_color('info')
-                )
-                await channel.send(embed=test_log)
-                results.append('  └ Логирование работает')
-            except discord.Forbidden:
-                results.append('  └ ❌ Нет прав на отправку логов')
-        else:
-            results.append('❌ Канал логов не настроен или недоступен')
-        
-        # Проверка ролей
-        mod_roles = self.config.get('moderator_role_ids', [])
-        member_role = self.config.get('member_role_id')
-        dev_roles = self.config.get('dev_role_ids', [])
         owner_roles = self.config.get('owner_role_ids', [])
+        dep_owner_roles = self.config.get('dep_owner_role_ids', [])
+        dev_roles = self.config.get('dev_role_ids', [])
+        contract_role = self.config.get('contract_role_id')
+        mod_roles = self.config.get('moderator_role_ids', [])
+        family_role = self.config.get('family_role_id')
+        member_role = self.config.get('member_role_id')
+        auto_role = self.config.get('auto_role_id')
         
-        if mod_roles:
-            valid_mod_roles = [r for r in mod_roles if ctx.guild.get_role(r)]
-            results.append(f'✅ Роли модераторов: {len(valid_mod_roles)}/{len(mod_roles)} доступны')
-        else:
-            results.append('❌ Роли модераторов не настроены')
+        roles_text = (
+            f"**Owner:** {get_roles_mention(owner_roles)}\n"
+            f"**Dep.Owner:** {get_roles_mention(dep_owner_roles)}\n"
+            f"**Developer:** {get_roles_mention(dev_roles)}\n"
+            f"**Contract:** {get_role_mention(contract_role)}\n"
+            f"**REC:** {get_roles_mention(mod_roles)}\n"
+            f"**Family:** {get_role_mention(family_role)}\n"
+            f"**Academy:** {get_role_mention(member_role)}\n"
+            f"**Guest:** {get_role_mention(auto_role)}"
+        )
         
-        if member_role and ctx.guild.get_role(member_role):
-            results.append('✅ Роль участника настроена и доступна')
-            # Проверка иерархии ролей
-            bot_top_role = ctx.guild.me.top_role
-            member_role_obj = ctx.guild.get_role(member_role)
-            if bot_top_role > member_role_obj:
-                results.append('  └ Иерархия ролей правильная')
+        embed1.add_field(
+            name="🎭 Роли",
+            value=roles_text,
+            inline=False
+        )
+        
+        # Другие настройки
+        embed1.add_field(
+            name="🔧 Прочее",
+            value=f"**Префикс:** `{self.config.get('prefix', '!')}`\n",
+            inline=False
+        )
+        
+        embed1.set_footer(text=f"Запросил: {ctx.author.name}")
+        
+        # Второй embed - Таблица прав (КОМПАКТНАЯ!)
+        embed2 = discord.Embed(
+            title='🔐 Права доступа',
+            color=0x2b2d31
+        )
+        
+        # Администрация
+        admin_table = (
+            "```\n"
+            "Owner     → ВСЕ команды + настройка\n"
+            "Dep.Owner → Контракты + Заявки\n"
+            "Developer → ВСЕ команды + настройка\n"
+            "```"
+        )
+        
+        # Модераторы
+        mod_table = (
+            "```\n"
+            "Contract → Контракты (все действия)\n"
+            "REC      → Заявки (одобрение/отклон)\n"
+            "```"
+        )
+        
+        # Участники
+        member_table = (
+            "```\n"
+            "Academy/Family → Запрос + Запись\n"
+            "```"
+        )
+        
+        embed2.add_field(name="👑 Администрация", value=admin_table, inline=False)
+        embed2.add_field(name="👥 Модераторы", value=mod_table, inline=False)
+        embed2.add_field(name="🎮 Участники", value=member_table, inline=False)
+        
+        # Третий embed - Команды
+        embed3 = discord.Embed(
+            title='📝 Команды настройки',
+            color=0x2b2d31
+        )
+        
+        embed3.add_field(
+            name="Каналы",
+            value=(
+                "`!config welcome_channel #канал`\n"
+                "`!config application_channel #канал`\n"
+                "`!config contracts_channel #канал`"
+            ),
+            inline=False
+        )
+        
+        embed3.add_field(
+            name="Роли",
+            value=(
+                "`!config owner_role @роль`\n"
+                "`!config dev_role @роль`\n"
+                "`!config contract_role @роль`"
+            ),
+            inline=False
+        )
+        
+        # Отправляем все три embed
+        await ctx.send(embeds=[embed1, embed2, embed3])
+    
+    async def update_setting(self, ctx, setting: str, value: str):
+        """Обновить настройку"""
+        
+        if not value:
+            await ctx.send(f"❌ Укажите значение для настройки `{setting}`")
+            return
+        
+        # ============ НАСТРОЙКА РОЛЕЙ ============
+        
+        if setting in ['owner_role', 'owner']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                current_roles = self.config.get('owner_role_ids', [])
+                if role_id not in current_roles:
+                    current_roles.append(role_id)
+                    self.config.set('owner_role_ids', current_roles)
+                    await ctx.send(f"✅ Роль Owner добавлена: <@&{role_id}>")
+                else:
+                    await ctx.send(f"⚠️ Эта роль уже добавлена как Owner")
             else:
-                results.append('  └ ⚠️ Роль бота должна быть выше роли участника!')
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['dep_owner_role', 'dep_owner', 'depowner']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                current_roles = self.config.get('dep_owner_role_ids', [])
+                if role_id not in current_roles:
+                    current_roles.append(role_id)
+                    self.config.set('dep_owner_role_ids', current_roles)
+                    await ctx.send(f"✅ Роль Dep.Owner добавлена: <@&{role_id}>")
+                else:
+                    await ctx.send(f"⚠️ Эта роль уже добавлена как Dep.Owner")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['dev_role', 'developer', 'dev']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                current_roles = self.config.get('dev_role_ids', [])
+                if role_id not in current_roles:
+                    current_roles.append(role_id)
+                    self.config.set('dev_role_ids', current_roles)
+                    await ctx.send(f"✅ Роль Developer добавлена: <@&{role_id}>")
+                else:
+                    await ctx.send(f"⚠️ Эта роль уже добавлена как Developer")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['contract_role', 'contract']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                self.config.set('contract_role_id', role_id)
+                await ctx.send(f"✅ Роль Contract установлена: <@&{role_id}>")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['moderator_role', 'mod_role', 'rec', 'rec_role']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                current_roles = self.config.get('moderator_role_ids', [])
+                if role_id not in current_roles:
+                    current_roles.append(role_id)
+                    self.config.set('moderator_role_ids', current_roles)
+                    await ctx.send(f"✅ Роль REC добавлена: <@&{role_id}>")
+                else:
+                    await ctx.send(f"⚠️ Эта роль уже добавлена как REC")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['family_role', 'family']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                self.config.set('family_role_id', role_id)
+                await ctx.send(f"✅ Роль Family установлена: <@&{role_id}>")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['member_role', 'academy', 'price_academy']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                self.config.set('member_role_id', role_id)
+                await ctx.send(f"✅ Роль Price Academy установлена: <@&{role_id}>")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        elif setting in ['auto_role', 'guest']:
+            role_id = self.parse_role(value, ctx)
+            if role_id:
+                self.config.set('auto_role_id', role_id)
+                await ctx.send(f"✅ Авто-роль Guest установлена: <@&{role_id}>")
+            else:
+                await ctx.send(f"❌ Роль не найдена!")
+        
+        # ============ НАСТРОЙКА КАНАЛОВ ============
+        
+        elif setting in ['welcome_channel', 'приветствие']:
+            channel_id = self.parse_channel(value, ctx)
+            if channel_id:
+                self.config.set('welcome_channel_id', channel_id)
+                await ctx.send(f"✅ Канал приветствия установлен: <#{channel_id}>")
+            else:
+                await ctx.send(f"❌ Канал не найден!")
+        
+        elif setting in ['application_channel', 'заявки']:
+            channel_id = self.parse_channel(value, ctx)
+            if channel_id:
+                self.config.set('application_channel_id', channel_id)
+                await ctx.send(f"✅ Канал заявок установлен: <#{channel_id}>")
+            else:
+                await ctx.send(f"❌ Канал не найден!")
+        
+        elif setting in ['review_channel', 'рассмотрение']:
+            channel_id = self.parse_channel(value, ctx)
+            if channel_id:
+                self.config.set('review_channel_id', channel_id)
+                await ctx.send(f"✅ Канал рассмотрения установлен: <#{channel_id}>")
+            else:
+                await ctx.send(f"❌ Канал не найден!")
+        
+        elif setting in ['logs_channel', 'логи']:
+            channel_id = self.parse_channel(value, ctx)
+            if channel_id:
+                self.config.set('logs_channel_id', channel_id)
+                await ctx.send(f"✅ Канал логов установлен: <#{channel_id}>")
+            else:
+                await ctx.send(f"❌ Канал не найден!")
+        
+        elif setting in ['contracts_channel', 'контракты']:
+            channel_id = self.parse_channel(value, ctx)
+            if channel_id:
+                self.config.set('contracts_channel_id', channel_id)
+                await ctx.send(f"✅ Канал контрактов (запросы) установлен: <#{channel_id}>")
+            else:
+                await ctx.send(f"❌ Канал не найден!")
+        
+        elif setting in ['contracts_members_channel', 'контракты_members']:
+            channel_id = self.parse_channel(value, ctx)
+            if channel_id:
+                self.config.set('contracts_members_channel_id', channel_id)
+                await ctx.send(f"✅ Канал контрактов (Members) установлен: <#{channel_id}>")
+            else:
+                await ctx.send(f"❌ Канал не найден!")
+        
+        # ============ ДРУГИЕ НАСТРОЙКИ ============
+        
+        elif setting == 'logo':
+            if value.startswith('http'):
+                await ctx.send(f"✅ Логотип обновлен!")
+            else:
+                await ctx.send(f"❌ Укажите корректный URL (должен начинаться с http)")
+        
         else:
-            results.append('❌ Роль участника не настроена или недоступна')
+            await ctx.send(f"❌ Неизвестная настройка: `{setting}`\n\n"
+                          f"Доступные настройки:\n"
+                          f"**Роли:** owner_role, dep_owner_role, dev_role, contract_role, moderator_role, family_role, member_role, auto_role\n"
+                          f"**Каналы:** welcome_channel, application_channel, review_channel, logs_channel, contracts_channel, contracts_members_channel\n"
+                          f"**Прочее:** logo")
+    
+    def parse_channel(self, value: str, ctx):
+        """Парсинг канала из упоминания или ID"""
+        # Убираем <# и >
+        value = value.strip('<#>')
         
-        if dev_roles:
-            valid_dev_roles = [r for r in dev_roles if ctx.guild.get_role(r)]
-            results.append(f'✅ Роли Dev: {len(valid_dev_roles)}/{len(dev_roles)} доступны')
-        else:
-            results.append('⚠️ Роли Dev не настроены')
-        
-        if owner_roles:
-            valid_owner_roles = [r for r in owner_roles if ctx.guild.get_role(r)]
-            results.append(f'✅ Роли Owner: {len(valid_owner_roles)}/{len(owner_roles)} доступны')
-        else:
-            results.append('⚠️ Роли Owner не настроены')
-        
-        # Проверка логотипа
-        logo_url = self.config.get('logo_url')
-        if logo_url and logo_url != "https://i.imgur.com/your_logo.png":
-            results.append('✅ Логотип настроен')
-        else:
-            results.append('⚠️ Логотип не настроен (используется по умолчанию)')
-        
-        # Проверка модулей
-        cogs_status = []
-        if 'Welcome' in self.bot.cogs:
-            cogs_status.append('✅ Приветствие')
-        if 'Applications' in self.bot.cogs:
-            cogs_status.append('✅ Заявки')
-        if 'Logs' in self.bot.cogs:
-            cogs_status.append('✅ Логирование')
-        if 'ConfigCommands' in self.bot.cogs:
-            cogs_status.append('✅ Настройка')
-        
-        results.append(f'\n📦 Модули: {len(cogs_status)}/4 загружены')
-        results.extend(['  └ ' + status for status in cogs_status])
-        
-        # Проверка прав бота
-        bot_permissions = ctx.guild.me.guild_permissions
-        perms_check = []
-        if bot_permissions.send_messages:
-            perms_check.append('✅ Send Messages')
-        if bot_permissions.embed_links:
-            perms_check.append('✅ Embed Links')
-        if bot_permissions.manage_roles:
-            perms_check.append('✅ Manage Roles')
-        else:
-            perms_check.append('❌ Manage Roles (нужно!)')
-        if bot_permissions.read_message_history:
-            perms_check.append('✅ Read Message History')
-        
-        results.append('\n🔐 Права бота:')
-        results.extend(['  └ ' + perm for perm in perms_check])
-        
-        # Итоговый результат
-        embed.description = '\n'.join(results)
-        
-        # Подсчет проблем
-        errors = len([r for r in results if r.startswith('❌')])
-        warnings = len([r for r in results if r.startswith('⚠️')])
-        
-        if errors == 0 and warnings == 0:
-            embed.color = self.config.get_color('success')
-            embed.add_field(
-                name='✅ Итог',
-                value='Все настройки корректны! Бот готов к работе.',
-                inline=False
-            )
-        elif errors > 0:
-            embed.color = self.config.get_color('error')
-            embed.add_field(
-                name='❌ Итог',
-                value=f'Найдено ошибок: {errors}, предупреждений: {warnings}\nИсправьте ошибки для корректной работы.',
-                inline=False
-            )
-        else:
-            embed.color = self.config.get_color('warning')
-            embed.add_field(
-                name='⚠️ Итог',
-                value=f'Предупреждений: {warnings}\nБот работает, но есть рекомендации.',
-                inline=False
-            )
-        
-        embed.set_footer(text='Price FamQ • Тест конфигурации')
-        
-        await ctx.send(embed=embed)
+        try:
+            channel_id = int(value)
+            channel = ctx.guild.get_channel(channel_id)
+            if channel:
+                return channel_id
+            else:
+                return None
+        except ValueError:
+            return None
 
 
 async def setup(bot):

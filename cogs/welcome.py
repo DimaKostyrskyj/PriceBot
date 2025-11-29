@@ -38,30 +38,52 @@ class Welcome(commands.Cog):
             print(f"Warning: Welcome channel {welcome_channel_id} not found")
             return
         
-        # Создание минималистичного embed приветствия
+        # Создание красивого embed приветствия
         embed = discord.Embed(
-            description=f'### Добро пожаловать, {member.mention}\n\nМы рады видеть тебя в **Price FamQ**',
-            color=self.config.get_color('primary'),
-            timestamp=datetime.now()
+            color=self.config.get_color('primary')
         )
+        
+        # Красивое описание с эмодзи и форматированием
+        welcome_text = (
+            f"## 👋 Добро пожаловать, {member.mention}!\n\n"
+            f"✨ **Мы рады приветствовать тебя в Price FamQ!**\n\n"
+            f"Теперь ты носишь роль **Friends** и можешь начать свой путь в нашей семье.\n\n"
+            f"╭─────────────────────╮\n"
+            f"│  **📝 Хочешь вступить в семью?**  │\n"
+            f"╰─────────────────────╯\n\n"
+            f"Подай заявку в <#{self.config.get('application_channel_id')}> и стань частью **Price Academy**!"
+        )
+        
+        embed.description = welcome_text
+        
+        # Установка аватара пользователя как большую картинку
+        embed.set_image(url=member.display_avatar.url)
         
         # Установка логотипа
-        logo_url = self.config.get('logo_url')
-        if logo_url and logo_url != "https://i.imgur.com/your_logo.png":
-            embed.set_thumbnail(url=logo_url)
         
-        # Основная информация
+        # Информационные поля
         embed.add_field(
-            name='',
-            value=f'**Хочешь стать частью семьи?**\nПодай заявку в <#{self.config.get("application_channel_id")}>',
-            inline=False
+            name='🎮 Участник',
+            value=f'**#{len(member.guild.members)}**',
+            inline=True
         )
         
-        # Футер
-        embed.set_footer(
-            text=f'Участник #{len(member.guild.members)} • Price FamQ',
-            icon_url=member.display_avatar.url
+        embed.add_field(
+            name='📅 Присоединился',
+            value=f'{datetime.now().strftime("%d.%m.%Y")}',
+            inline=True
         )
+        
+        embed.add_field(
+            name='🎭 Роль',
+            value='**Friends**',
+            inline=True
+        )
+        
+        # Красивый футер
+        embed.set_footer(text='Price FamQ')
+        
+        embed.timestamp = datetime.now()
         
         try:
             await welcome_channel.send(embed=embed)

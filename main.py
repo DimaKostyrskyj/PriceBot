@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import discord
 from discord.ext import commands
 import os
@@ -31,10 +32,13 @@ class PriceFamQBot(commands.Bot):
         
         # Загрузка всех cogs из папки cogs
         cogs_to_load = [
+            'cogs.diagnostics',  # Диагностика - первым!
             'cogs.welcome',
             'cogs.applications',
             'cogs.logs',
-            'cogs.config_commands'
+            'cogs.config_commands',
+            'cogs.contracts',
+            'cogs.help'
         ]
         
         for cog in cogs_to_load:
@@ -44,7 +48,7 @@ class PriceFamQBot(commands.Bot):
             except Exception as e:
                 print(f"❌ Ошибка загрузки модуля {cog}: {e}")
         
-        print("🔄 Синхронизация команд...")
+        print("✅ Все модули загружены")
         
     async def on_ready(self):
         """Событие готовности бота"""
@@ -58,6 +62,15 @@ class PriceFamQBot(commands.Bot):
         # Установка статуса
         activity = discord.Game(name="🏠 Price FamQ | !help")
         await self.change_presence(status=discord.Status.online, activity=activity)
+    
+    async def on_message(self, message):
+        """КРИТИЧНО: Обработка команд!"""
+        # Игнорируем сообщения от ботов
+        if message.author.bot:
+            return
+        
+        # ВАЖНО: Обрабатываем команды
+        await self.process_commands(message)
 
 def main():
     """Главная функция запуска бота"""
