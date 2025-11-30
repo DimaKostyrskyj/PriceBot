@@ -218,7 +218,7 @@ class ContractPublishModal(Modal):
     """Модальная форма для публикации контракта"""
     
     def __init__(self):
-        super().__init__(title='🚀 Публикация контракта', timeout=300)
+        super().__init__(title='🚀 Публикация контракта', timeout=None)
         self.config = ConfigManager()
 
     contract_name = TextInput(
@@ -489,7 +489,7 @@ class ContractRequestForm(Modal):
     )
 
     def __init__(self, bot, channel_id):
-        super().__init__(title='📝 Запрос контракта', timeout=300)
+        super().__init__(title='📝 Запрос контракта', timeout=None)
         self.bot = bot
         self.channel_id = channel_id
         self.config = ConfigManager()
@@ -649,7 +649,7 @@ class ContractCreateButton(View):
     """Кнопка для открытия формы создания контракта"""
     
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)
     
     @discord.ui.button(
         label='📋 Создать контракт',
