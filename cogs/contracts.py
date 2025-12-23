@@ -96,7 +96,7 @@ class ContractView(View):
         
         if not has_permission:
             await interaction.response.send_message(
-                '❌ У вас нет прав для начала контракта! Требуется роль Contract, Owner или Dep.Owner.',
+                '❌ Ты че дебил!!! Нужны роли Contract, Cur.Contract, Owner или Dep.Owner.',
                 ephemeral=True
             )
             return
@@ -136,9 +136,10 @@ class ContractView(View):
                 f'▶️ **Контракт начат!**\n{mention_text}\n\nНачал: {interaction.user.mention}'
             )
         
+        # Отвечаем ephemeral, чтобы не писать в чат
         await interaction.response.send_message(
-            f'✅ Контракт начат! Начал: {interaction.user.mention}',
-            ephemeral=False
+            f'✅ Контракт начат!',
+            ephemeral=True
         )
     
     async def update_embed(self, interaction: discord.Interaction):
@@ -206,7 +207,7 @@ class ContractFinishView(View):
         
         if not has_permission:
             await interaction.response.send_message(
-                '❌ У вас нет прав для завершения контракта!',
+                '❌ Ты че дебил!!! Нужны роли Contract, Cur.Contract, Owner или Dep.Owner.',
                 ephemeral=True
             )
             return
@@ -459,17 +460,6 @@ class ContractPublishModal(Modal):
             except Exception as e:
                 print(f"❌ Ошибка создания ветки: {e}")
             
-            # Автоматически добавляем кнопку создания контракта после каждого контракта
-            request_embed = discord.Embed(
-                title='📋 Создать контракт',
-                description='Нажмите кнопку ниже, чтобы создать новый контракт.',
-                color=0x2b2d31
-            )
-            request_embed.set_footer(text='Price FamQ')
-            
-            request_view = ContractRequestButtonPersistent()
-            await members_channel.send(embed=request_embed, view=request_view)
-            
             await interaction.response.send_message(
                 f"✅ Контракт \"{self.contract_name.value}\" успешно опубликован! Тегнуты роли: **{role_name_text}**",
                 ephemeral=True
@@ -692,7 +682,7 @@ class ContractRequestButtonPersistent(View):
         
         if not has_permission:
             await interaction.response.send_message(
-                '❌ У вас нет прав для создания контракта! Требуется роль: Contracts, Cur. Contracts, Owner или Dep.Owner.',
+                '❌ Ты че дебил!!! Нужны роли Contract, Cur.Contract, Owner или Dep.Owner.',
                 ephemeral=True
             )
             return
