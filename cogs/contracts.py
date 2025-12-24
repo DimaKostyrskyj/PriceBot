@@ -120,9 +120,15 @@ class ContractView(View):
         
         await message.edit(embed=embed, view=new_view)
         
+        # Отправляем сообщение в ветку
+        if message.thread:
+            await message.thread.send(
+                f'✅ Контракт начат! Начал: {interaction.user.mention}'
+            )
+        
         await interaction.response.send_message(
-            f'✅ Контракт начат! Начал: {interaction.user.mention}',
-            ephemeral=False
+            '✅ Контракт начат!',
+            ephemeral=True
         )
     
     async def update_embed(self, interaction: discord.Interaction):
@@ -171,25 +177,6 @@ class ContractFinishView(View):
     )
     async def finish_button(self, interaction: discord.Interaction, button: Button):
         """Кнопка завершения контракта"""
-        # Проверяем права
-        contract_role_id = self.config.get('contract_role_id', 0)
-        owner_role_ids = self.config.get('owner_role_ids', [])
-        
-        user_role_ids = [role.id for role in interaction.user.roles]
-        
-        has_permission = False
-        if contract_role_id and contract_role_id in user_role_ids:
-            has_permission = True
-        if any(role_id in user_role_ids for role_id in owner_role_ids):
-            has_permission = True
-        
-        if not has_permission:
-            await interaction.response.send_message(
-                '❌ У вас нет прав для завершения контракта!',
-                ephemeral=True
-            )
-            return
-        
         # Обновляем embed
         message = interaction.message
         embed = message.embeds[0]
@@ -208,9 +195,15 @@ class ContractFinishView(View):
         # Убираем все кнопки
         await message.edit(embed=embed, view=None)
         
+        # Отправляем сообщение в ветку
+        if message.thread:
+            await message.thread.send(
+                f'✅ Контракт завершен! Завершил: {interaction.user.mention}'
+            )
+        
         await interaction.response.send_message(
-            f'✅ Контракт завершен! Завершил: {interaction.user.mention}',
-            ephemeral=False
+            '✅ Контракт завершен!',
+            ephemeral=True
         )
 
 
@@ -431,17 +424,6 @@ class ContractPublishModal(Modal):
             except Exception as e:
                 print(f"❌ Ошибка создания ветки: {e}")
             
-            # Автоматически добавляем кнопку создания контракта после каждого контракта
-            request_embed = discord.Embed(
-                title='📋 Создать контракт',
-                description='Нажмите кнопку ниже, чтобы создать новый контракт.',
-                color=0x2b2d31
-            )
-            request_embed.set_footer(text='Price FamQ')
-            
-            request_view = ContractRequestButtonPersistent()
-            await members_channel.send(embed=request_embed, view=request_view)
-            
             await interaction.response.send_message(
                 f"✅ Контракт \"{self.contract_name.value}\" успешно опубликован! Тегнуты роли: **{role_name_text}**",
                 ephemeral=True
@@ -464,185 +446,6 @@ class ContractPublishModal(Modal):
                     pass
 
 
-class ContractRequestForm(Modal):
-    """Форма для запроса контракта пользователями"""
-    
-    contract_name = TextInput(
-        label='Название контракта',
-        placeholder='Например: Бирюзовый док',
-        required=True,
-        max_length=100
-    )
-    
-    duration_and_execution = TextInput(
-        label='Срок действия / Длится',
-        placeholder='Например: до 25.12.2024 / 2ч 30м',
-        required=True,
-        max_length=100
-    )
-    
-    complete_and_chance = TextInput(
-        label='Выполнить за / Шанс',
-        placeholder='Например: 4ч / 100%',
-        required=True,
-        max_length=100
-    )
-
-    def __init__(self, bot, channel_id):
-        super().__init__(title='📝 Запрос контракта', timeout=None)
-        self.bot = bot
-        self.channel_id = channel_id
-        self.config = ConfigManager()
-
-    async def on_submit(self, interaction: discord.Interaction):
-        """Обработка отправки формы запроса контракта"""
-        try:
-            # Парсим первое объединенное поле (Срок / Длится)
-            duration_input = self.duration_and_execution.value
-            duration_parts = [part.strip() for part in duration_input.split('/')]
-            
-            if len(duration_parts) != 2:
-                await interaction.response.send_message(
-                    "❌ Неверный формат! Используйте: Срок действия / Длится\nНапример: до 25.12.2024 / 2ч 30м",
-                    ephemeral=True
-                )
-                return
-            
-            contract_duration = duration_parts[0]
-            execution_time = duration_parts[1]
-            
-            # Парсим второе объединенное поле (Выполнить / Шанс)
-            complete_input = self.complete_and_chance.value
-            complete_parts = [part.strip() for part in complete_input.split('/')]
-            
-            if len(complete_parts) != 2:
-                await interaction.response.send_message(
-                    "❌ Неверный формат! Используйте: Выполнить за / Шанс\nНапример: 4ч / 100%",
-                    ephemeral=True
-                )
-                return
-            
-            complete_for = complete_parts[0]
-            chance = complete_parts[1]
-            
-            # Отвечаем на interaction
-            await interaction.response.send_message(
-                '✅ Ваш запрос контракта отправлен!',
-                ephemeral=True
-            )
-            
-            # Создаем красивый embed В ТОМ ЖЕ СТИЛЕ
-            embed = discord.Embed(
-                color=0x2b2d31,  # Темно-серый цвет
-                timestamp=datetime.now()
-            )
-            
-            embed.title = f"📝 Запрос: {self.contract_name.value}"
-            
-            # Основная информация
-            embed.description = (
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"**👤 Запросил:** {interaction.user.mention}\n"
-                f"━━━━━━━━━━━━━━━━━━━━"
-            )
-            
-            # Информация о запросе
-            embed.add_field(
-                name="⏰ Срок действия контракта:",
-                value=f"{contract_duration}",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🕒 Контракт длится:",
-                value=f"{execution_time}",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="⚡ Выполнить за:",
-                value=f"{complete_for}",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🎲 Шанс:",
-                value=f"{chance}",
-                inline=False
-            )
-
-            
-            embed.set_footer(text='Price FamQ')
-            
-            # Отправляем в канал контрактов
-            channel = self.bot.get_channel(self.channel_id)
-            if channel:
-                try:
-                    # Получаем роль Contract для упоминания
-                    contract_role_id = self.config.get('contract_role_id', 0)
-                    mention = ""
-                    if contract_role_id:
-                        contract_role = channel.guild.get_role(contract_role_id)
-                        if contract_role:
-                            mention = f"{contract_role.mention}\n\n"
-                    
-                    await channel.send(content=mention, embed=embed)
-                    print(f"✅ Запрос контракта создан от {interaction.user.name}")
-                except Exception as e:
-                    await interaction.followup.send(
-                        f'Ошибка при отправке запроса: {e}',
-                        ephemeral=True
-                    )
-                    
-        except Exception as e:
-            print(f"❌ Ошибка при создании запроса: {e}")
-            try:
-                await interaction.response.send_message(
-                    f"❌ Ошибка при создании запроса: {str(e)}",
-                    ephemeral=True
-                )
-            except:
-                try:
-                    await interaction.followup.send(
-                        f"❌ Ошибка при создании запроса: {str(e)}",
-                        ephemeral=True
-                    )
-                except:
-                    pass
-
-
-class ContractRequestButton(View):
-    """Кнопка для запроса контракта"""
-    
-    def __init__(self, bot, channel_id):
-        super().__init__(timeout=None)
-        self.bot = bot
-        self.channel_id = channel_id
-    
-    @discord.ui.button(
-        label='📝 Запросить контракт',
-        style=discord.ButtonStyle.primary,
-        custom_id='contract_request_button'
-    )
-    async def contract_button(self, interaction: discord.Interaction, button: Button):
-        """Обработка нажатия кнопки"""
-        await interaction.response.send_modal(ContractRequestForm(self.bot, self.channel_id))
-
-
-class ContractRequestButtonPersistent(View):
-    """Персистентная кнопка для создания контракта (появляется после каждого контракта)"""
-    
-    def __init__(self):
-        super().__init__(timeout=None)
-    
-    @discord.ui.button(
-        label='📋 Создать контракт',
-        style=discord.ButtonStyle.success,
-        custom_id='contract_create_persistent'
-    )
-    async def create_button(self, interaction: discord.Interaction, button: Button):
-        """Обработка нажатия кнопки - открывает форму создания контракта"""
-        await interaction.response.send_modal(ContractPublishModal())
 
 
 class ContractCreateButton(View):
@@ -672,7 +475,6 @@ class Contracts(commands.Cog):
         # Регистрируем персистентные View
         self.bot.add_view(ContractView())
         self.bot.add_view(ContractFinishView())
-        self.bot.add_view(ContractRequestButtonPersistent())
         
         # Запускаем таск автозакрепления
         self.auto_pin_task.start()
@@ -713,49 +515,6 @@ class Contracts(commands.Cog):
     async def before_auto_pin(self):
         """Ждем пока бот будет готов"""
         await self.bot.wait_until_ready()
-    
-    @commands.command(name='setup_contract_request')
-    @commands.has_permissions(administrator=True)
-    async def setup_contract_request(self, ctx):
-        """Создает сообщение с кнопкой запроса контракта"""
-        
-        contracts_channel_id = self.config.get('contracts_channel_id', 0)
-        if not contracts_channel_id:
-            await ctx.send('❌ Сначала настройте канал контрактов: `!config contracts_channel #канал`')
-            return
-        
-        embed = discord.Embed(
-            title='Запрос контракта',
-            description='Нажмите на кнопку ниже, чтобы запросить выполнение контракта.',
-            color=self.config.get_color('primary')
-        )
-        
-        
-        embed.add_field(
-            name='Информация',
-            value='• Заполните все поля формы\n'
-                  '• Укажите точное время\n'
-                  '• Ждите ответа от администрации',
-            inline=False
-        )
-        
-        view = ContractRequestButton(self.bot, contracts_channel_id)
-        message = await ctx.send(embed=embed, view=view)
-        
-        # Сохраняем ID сообщения для автозакрепления
-        self.pinned_message_id = message.id
-        
-        # Закрепляем сообщение
-        try:
-            await message.pin()
-            await ctx.send('✅ Кнопка создана и закреплена!')
-        except discord.Forbidden:
-            await ctx.send('⚠️ Кнопка создана, но нет прав для закрепления')
-        
-        try:
-            await ctx.message.delete()
-        except:
-            pass
     
     @commands.command(name='contract')
     @commands.has_permissions(administrator=True)
