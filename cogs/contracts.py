@@ -82,7 +82,6 @@ class ContractView(View):
         # Проверяем права
         contract_role_id = self.config.get('contract_role_id', 0)
         owner_role_ids = self.config.get('owner_role_ids', [])
-        dep_owner_role_ids = self.config.get('dep_owner_role_ids', [])
         
         user_role_ids = [role.id for role in interaction.user.roles]
         
@@ -91,12 +90,10 @@ class ContractView(View):
             has_permission = True
         if any(role_id in user_role_ids for role_id in owner_role_ids):
             has_permission = True
-        if any(role_id in user_role_ids for role_id in dep_owner_role_ids):
-            has_permission = True
         
         if not has_permission:
             await interaction.response.send_message(
-                '❌ Ты че дебил!!! Нужны роли Contract, Cur.Contract, Owner или Dep.Owner.',
+                '❌ У вас нет прав для начала контракта! Требуется роль Contract или Owner.',
                 ephemeral=True
             )
             return
@@ -119,27 +116,13 @@ class ContractView(View):
                 break
         
         # Создаем новый View только с кнопкой "Закончить"
-        new_view = ContractFinishView(message=message, participants=self.participants)
+        new_view = ContractFinishView()
         
         await message.edit(embed=embed, view=new_view)
         
-        # Формируем упоминания участников для ветки
-        participant_mentions = []
-        for user_id in self.participants:
-            participant_mentions.append(f"<@{user_id}>")
-        
-        # Проверяем, есть ли ветка у сообщения
-        if message.thread:
-            # Отправляем в ветку
-            mention_text = " ".join(participant_mentions) if participant_mentions else ""
-            await message.thread.send(
-                f'▶️ **Контракт начат!**\n{mention_text}\n\nНачал: {interaction.user.mention}'
-            )
-        
-        # Отвечаем ephemeral, чтобы не писать в чат
         await interaction.response.send_message(
-            f'✅ Контракт начат!',
-            ephemeral=True
+            f'✅ Контракт начат! Начал: {interaction.user.mention}',
+            ephemeral=False
         )
     
     async def update_embed(self, interaction: discord.Interaction):
@@ -176,11 +159,9 @@ class ContractView(View):
 class ContractFinishView(View):
     """View с кнопкой завершения контракта"""
     
-    def __init__(self, message=None, participants=None):
+    def __init__(self):
         super().__init__(timeout=None)
         self.config = ConfigManager()
-        self.message = message
-        self.participants = participants if participants is not None else []
     
     @discord.ui.button(
         label='Закончить',
@@ -193,7 +174,6 @@ class ContractFinishView(View):
         # Проверяем права
         contract_role_id = self.config.get('contract_role_id', 0)
         owner_role_ids = self.config.get('owner_role_ids', [])
-        dep_owner_role_ids = self.config.get('dep_owner_role_ids', [])
         
         user_role_ids = [role.id for role in interaction.user.roles]
         
@@ -202,12 +182,10 @@ class ContractFinishView(View):
             has_permission = True
         if any(role_id in user_role_ids for role_id in owner_role_ids):
             has_permission = True
-        if any(role_id in user_role_ids for role_id in dep_owner_role_ids):
-            has_permission = True
         
         if not has_permission:
             await interaction.response.send_message(
-                '❌ Ты че дебил!!! Нужны роли Contract, Cur.Contract, Owner или Dep.Owner.',
+                '❌ У вас нет прав для завершения контракта!',
                 ephemeral=True
             )
             return
@@ -230,16 +208,9 @@ class ContractFinishView(View):
         # Убираем все кнопки
         await message.edit(embed=embed, view=None)
         
-        # Проверяем, есть ли ветка у сообщения
-        if message.thread:
-            # Отправляем в ветку вместо чата
-            await message.thread.send(
-                f'⏹️ **Контракт завершен!**\n\nЗавершил: {interaction.user.mention}'
-            )
-        
         await interaction.response.send_message(
-            f'✅ Контракт завершен!',
-            ephemeral=True
+            f'✅ Контракт завершен! Завершил: {interaction.user.mention}',
+            ephemeral=False
         )
 
 
@@ -460,6 +431,17 @@ class ContractPublishModal(Modal):
             except Exception as e:
                 print(f"❌ Ошибка создания ветки: {e}")
             
+            # Автоматически добавляем кнопку создания контракта после каждого контракта
+            request_embed = discord.Embed(
+                title='📋 Создать контракт',
+                description='Нажмите кнопку ниже, чтобы создать новый контракт.',
+                color=0x2b2d31
+            )
+            request_embed.set_footer(text='Price FamQ')
+            
+            request_view = ContractRequestButtonPersistent()
+            await members_channel.send(embed=request_embed, view=request_view)
+            
             await interaction.response.send_message(
                 f"✅ Контракт \"{self.contract_name.value}\" успешно опубликован! Тегнуты роли: **{role_name_text}**",
                 ephemeral=True
@@ -660,33 +642,6 @@ class ContractRequestButtonPersistent(View):
     )
     async def create_button(self, interaction: discord.Interaction, button: Button):
         """Обработка нажатия кнопки - открывает форму создания контракта"""
-        config = ConfigManager()
-        
-        # Получаем ID ролей из конфига
-        contract_role_ids = config.get('contract_role_id', [])  # Contracts
-        owner_role_ids = config.get('owner_role_ids', [])  # Owner
-        dep_owner_role_ids = config.get('dep_owner_role_ids', [])  # Dep.Owner
-        
-        # Если contract_role_id не список, делаем его списком
-        if not isinstance(contract_role_ids, list):
-            contract_role_ids = [contract_role_ids] if contract_role_ids else []
-        
-        # Собираем все разрешенные роли в один список
-        allowed_role_ids = contract_role_ids + owner_role_ids + dep_owner_role_ids
-        
-        # Получаем роли пользователя
-        user_role_ids = [role.id for role in interaction.user.roles]
-        
-        # Проверяем есть ли хоть одна разрешенная роль
-        has_permission = any(role_id in user_role_ids for role_id in allowed_role_ids)
-        
-        if not has_permission:
-            await interaction.response.send_message(
-                '❌ Ты че дебил!!! Нужны роли Contract, Cur.Contract, Owner или Dep.Owner.',
-                ephemeral=True
-            )
-            return
-        
         await interaction.response.send_modal(ContractPublishModal())
 
 
@@ -718,7 +673,6 @@ class Contracts(commands.Cog):
         self.bot.add_view(ContractView())
         self.bot.add_view(ContractFinishView())
         self.bot.add_view(ContractRequestButtonPersistent())
-        self.bot.add_view(ContractCreateButton())
         
         # Запускаем таск автозакрепления
         self.auto_pin_task.start()
