@@ -277,8 +277,17 @@ class ApplicationReviewView(View):
     
     def _check_permissions(self, interaction: discord.Interaction) -> bool:
         """Проверка прав на рассмотрение заявок"""
-        moderator_role_ids = self.config.get('moderator_role_ids', [])
-        return any(role.id in moderator_role_ids for role in interaction.user.roles)
+        # Получаем все необходимые ID ролей из конфига
+        moderator_role_ids = self.config.get('moderator_role_ids', [])  # REC, Cur.REC
+        owner_role_ids = self.config.get('owner_role_ids', [])  # Owner
+        dep_owner_role_ids = self.config.get('dep_owner_role_ids', [])  # Dep.Owner
+        dev_role_ids = self.config.get('dev_role_ids', [])  # Developer
+        
+        # Собираем все разрешенные роли в один список
+        allowed_role_ids = moderator_role_ids + owner_role_ids + dep_owner_role_ids + dev_role_ids
+        
+        # Проверяем есть ли у пользователя хоть одна разрешенная роль
+        return any(role.id in allowed_role_ids for role in interaction.user.roles)
     
     @discord.ui.button(label='📋 Рассмотреть', style=discord.ButtonStyle.primary, custom_id='review')
     async def review_button(self, interaction: discord.Interaction, button: Button):
