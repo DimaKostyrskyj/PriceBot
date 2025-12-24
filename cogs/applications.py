@@ -198,6 +198,12 @@ class RejectReasonModal(Modal, title='Причина отклонения'):
     
     async def on_submit(self, interaction: discord.Interaction):
         """Обработка отклонения заявки"""
+        # ВАЖНО: Сначала отвечаем на interaction!
+        await interaction.response.send_message(
+            f'✅ Заявка отклонена. Пользователь уведомлен.',
+            ephemeral=True
+        )
+        
         user = await self.bot.fetch_user(self.user_id)
         
         # Уведомляем пользователя об отклонении
@@ -234,10 +240,6 @@ class RejectReasonModal(Modal, title='Причина отклонения'):
         
         # Логирование
         await self._log_action(interaction.user, user, "отклонил", self.reason.value)
-        
-        await interaction.response.send_message(
-            f'✅ Заявка отклонена. Пользователь уведомлен.',
-            ephemeral=True
         )
     
     async def _log_action(self, moderator: discord.User, applicant: discord.User, action: str, reason: str = None):
@@ -299,6 +301,12 @@ class ApplicationReviewView(View):
             )
             return
         
+        # ВАЖНО: Сначала отвечаем на interaction!
+        await interaction.response.send_message(
+            '✅ Вы взяли заявку на рассмотрение.',
+            ephemeral=True
+        )
+        
         # Обновляем embed
         embed = interaction.message.embeds[0]
         embed.add_field(
@@ -309,10 +317,6 @@ class ApplicationReviewView(View):
         embed.color = self.config.get_color('warning')
         
         await interaction.message.edit(embed=embed)
-        await interaction.response.send_message(
-            '✅ Вы взяли заявку на рассмотрение.',
-            ephemeral=True
-        )
         
         # Логирование
         await self._log_action(interaction.user, self.user_id, "взял на рассмотрение")
@@ -327,20 +331,28 @@ class ApplicationReviewView(View):
             )
             return
         
+        # ВАЖНО: Сначала отвечаем на interaction!
+        await interaction.response.send_message(
+            f'⏳ Обрабатываю заявку...',
+            ephemeral=True
+        )
+        
         user = await self.bot.fetch_user(self.user_id)
         guild = interaction.guild
         member = guild.get_member(self.user_id)
         
         # Выдаем роль Price Academy
         member_role_id = self.config.get('member_role_id')
+        role_given = False
         if member and member_role_id:
             role = guild.get_role(member_role_id)
             if role:
                 try:
                     await member.add_roles(role)
+                    role_given = True
                 except discord.Forbidden:
-                    await interaction.response.send_message(
-                        'Не удалось выдать роль. Проверьте права бота.',
+                    await interaction.followup.send(
+                        '⚠️ Заявка одобрена, но не удалось выдать роль. Проверьте права бота.',
                         ephemeral=True
                     )
         
@@ -379,10 +391,17 @@ class ApplicationReviewView(View):
         # Логирование
         await self._log_action(interaction.user, self.user_id, "одобрил")
         
-        await interaction.response.send_message(
-            f'✅ Заявка одобрена! {user.mention} получил роль Price Academy.',
-            ephemeral=True
-        )
+        # Обновляем сообщение о статусе
+        if role_given:
+            await interaction.followup.send(
+                f'✅ Заявка одобрена! {user.mention} получил роль Price Academy.',
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                f'✅ Заявка одобрена!',
+                ephemeral=True
+            )
     
     @discord.ui.button(label='❌ Отклонить', style=discord.ButtonStyle.danger, custom_id='reject')
     async def reject_button(self, interaction: discord.Interaction, button: Button):
