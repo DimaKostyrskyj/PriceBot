@@ -93,7 +93,7 @@ class ContractView(View):
         
         if not has_permission:
             await interaction.response.send_message(
-                '❌ У вас нет прав для начала контракта! Требуется роль Contract или Owner.',
+                '❌ Вы дебил! У вас нет прав!!! Требуется роль Contract или Owner.',
                 ephemeral=True
             )
             return

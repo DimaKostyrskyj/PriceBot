@@ -16,7 +16,7 @@ class ApplicationForm(Modal, title='Заявка в Price FamQ'):
     )
     
     age = TextInput(
-        label='Возраст персонажа',
+        label='Свой возраст',
         placeholder='Например: 25',
         required=True,
         max_length=3
